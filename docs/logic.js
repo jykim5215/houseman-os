@@ -3,7 +3,7 @@
 'use strict';
 
 const Logic = (() => {
-  const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const now = () => { const d = new Date(); const x = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return x.toISOString().slice(0, 19).replace('T', ' '); };
   const dday = (deadline) => !deadline ? 999 : Math.ceil((new Date(deadline.replace(' ', 'T')) - Date.now()) / 86400000);
   const daysSince = (ts) => !ts ? 0 : Math.floor((Date.now() - new Date(ts.replace(' ', 'T'))) / 86400000);
 

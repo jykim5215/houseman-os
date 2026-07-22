@@ -13,10 +13,12 @@ const Store = (() => {
     return d;
   })());
 
-  const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
-  const today = () => new Date().toISOString().slice(0, 10);
+  // 로컬(한국) 시간 기준 — toISOString은 UTC라 그대로 쓰면 안 됨
+  const localIso = (d) => { const x = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return x.toISOString().slice(0, 19).replace('T', ' '); };
+  const now = () => localIso(new Date());
+  const today = () => now().slice(0, 10);
   const uid = (p) => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  const days = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  const days = (n) => localIso(new Date(Date.now() + n * 86400000));
 
   /* ── 시드 데이터 ── */
   function seed() {
