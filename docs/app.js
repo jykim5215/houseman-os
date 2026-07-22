@@ -19,7 +19,7 @@ const state = { seg: 'stock', q: '', shortOnly: false, xp: null };
 function sheet(html) {
   $('#sheetBody').innerHTML = html;
   $('#sheetbg').classList.remove('hide');
-  requestAnimationFrame(() => $('#sheet').classList.add('open'));
+  setTimeout(() => $('#sheet').classList.add('open'), 10); // rAF는 백그라운드 탭에서 멈춤
 }
 function closeSheet() {
   $('#sheet').classList.remove('open');
