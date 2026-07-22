@@ -1,0 +1,16 @@
+{
+  "name": "하우스맨 노트 — Vivaldi Park Houseman OS",
+  "short_name": "하우스맨 노트",
+  "description": "비발디파크 하우스맨 업무 플랫폼 — 재고·장비·습득물·하자·인계 + 신뢰형 챗",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8f9fc",
+  "theme_color": "#f8f9fc",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
