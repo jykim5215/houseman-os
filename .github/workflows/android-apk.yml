@@ -1,0 +1,105 @@
+name: Android APK 빌드
+
+# 하우스맨 노트 PWA를 WebView 래퍼 APK로 빌드해 Release에 첨부한다.
+# 수동 실행(Run workflow) 또는 android/twa-manifest.json 변경 시 동작.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android/twa-manifest.json'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: JDK 17 설치
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK 설치
+        uses: android-actions/setup-android@v3
+
+      - name: Bubblewrap 설치
+        run: npm install -g @bubblewrap/cli@latest
+
+      - name: Bubblewrap 설정 (JDK/SDK 경로)
+        run: |
+          mkdir -p "$HOME/.bubblewrap"
+          cat > "$HOME/.bubblewrap/config.json" <<EOF
+          { "jdkPath": "$JAVA_HOME", "androidSdkPath": "$ANDROID_SDK_ROOT" }
+          EOF
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+      - name: 서명 키 준비
+        working-directory: android
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          PASS="${KS_PASS:-houseman-os}"
+          echo "STORE_PASS=$PASS" >> "$GITHUB_ENV"
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > android.keystore
+            echo "기존 서명 키(secret) 사용"
+          else
+            keytool -genkeypair -v -keystore android.keystore -alias houseman \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PASS" -keypass "$PASS" \
+              -dname "CN=Houseman OS, OU=Housekeeping, O=Vivaldi Park, L=Hongcheon, C=KR"
+            echo "새 서명 키 생성 — 안정적 업데이트를 원하면 이 키를 secret으로 저장하세요(아래 artifact)"
+          fi
+
+      - name: APK 빌드
+        working-directory: android
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ env.STORE_PASS }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ env.STORE_PASS }}
+        run: |
+          bubblewrap update --skipVersionUpgrade || true
+          bubblewrap build --skipPwaValidation
+          ls -la
+
+      - name: APK 이름 정리
+        working-directory: android
+        run: |
+          APK=$(ls app-release-signed.apk 2>/dev/null || ls *-release-signed.apk 2>/dev/null || ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -n1)
+          echo "APK 경로: $APK"
+          cp "$APK" "$GITHUB_WORKSPACE/houseman-note.apk"
+
+      - name: 서명 키 백업 업로드(관리자용)
+        uses: actions/upload-artifact@v4
+        with:
+          name: signing-keystore
+          path: android/android.keystore
+          retention-days: 7
+
+      - name: APK 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: houseman-note-apk
+          path: houseman-note.apk
+
+      - name: Release에 APK 첨부
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: 하우스맨 노트 APK (최신)
+          body: |
+            안드로이드 설치용 APK입니다. 휴대폰에서 이 파일을 내려받아 설치하세요.
+            (설정 → '출처를 알 수 없는 앱 설치' 허용이 필요할 수 있습니다.)
+            iPhone은 APK를 쓸 수 없으니 홈 화면 추가(PWA)를 사용하세요.
+          files: houseman-note.apk
+          make_latest: true

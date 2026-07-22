@@ -1,6 +1,6 @@
 /* 하우스맨 노트 — UI (Style C: Command Chat) */
 'use strict';
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.4.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -485,23 +485,27 @@ function exportDailyCsv() {
     [], ['미해결 인계'], ...db().handover.filter((h) => !h.resolved).map((h) => [h.createdAt, h.author, h.room || '', KIND_KO[h.kind] || h.kind, h.content])]);
 }
 
-/* ── 근무자·설정 ── */
-function workerSheet(first) {
-  sheet(`<h3>근무 시작 — 이름 선택</h3><div class="wlist">
-    ${db().workers.map((w) => `<button data-w="${esc(w.name)}">${esc(w.name)}</button>`).join('')}</div>
-    <p class="meta" style="margin-top:10px">선택한 이름이 수정자·감사 로그에 자동 반영됩니다. 로그인은 없습니다.</p>`);
-  $$('#sheetBody [data-w]').forEach((b) => b.onclick = () => {
-    Store.worker = b.dataset.w;
-    $('#workerChip').textContent = b.dataset.w + ' · 근무중';
-    closeSheet();
-    if (first) briefingCard();
-  });
+/* ── 내 이름(선택) — 감사 로그 표기용, 강제 아님 ── */
+function workerSheet() {
+  sheet(`<h3>내 이름 <span class="meta">(선택)</span></h3>
+    <p class="meta" style="margin-bottom:4px">변경 기록(감사 로그)에 누가 했는지 표기됩니다. 로그인은 없습니다.</p>
+    <div class="wlist">${db().workers.map((w) => `<button data-w="${esc(w.name)}">${esc(w.name)}</button>`).join('')}</div>
+    <label>직접 입력</label><input type="text" id="wname" placeholder="이름" value="${esc(Store.worker || '')}">
+    <div class="foot"><button class="btn" data-c>닫기</button><button class="btn filled" data-ok>저장</button></div>`);
+  const set = (name) => { Store.worker = name; $('#workerChip').textContent = name || '이름'; closeSheet(); };
+  $$('#sheetBody [data-w]').forEach((b) => b.onclick = () => set(b.dataset.w));
+  $('#sheetBody [data-c]').onclick = closeSheet;
+  $('#sheetBody [data-ok]').onclick = () => set($('#wname').value.trim());
 }
-$('#workerChip').onclick = () => workerSheet(false);
+$('#workerChip').onclick = () => workerSheet();
 
 $('#gearBtn').onclick = () => {
   const c = Store.Sync.cfg || {};
+  const connected = !!Store.Sync.cfg;
   sheet(`<h3>설정</h3>
+    <div class="qrow" style="padding:0 0 10px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${connected ? '연결됨' : '로컬 모드'}</span></div>
+    <button class="btn filled" data-team style="width:100%;margin-bottom:12px">팀 암호로 연결</button>
+    <details style="margin-bottom:8px"><summary class="meta" style="cursor:pointer">고급 — 저장소·토큰 직접 입력</summary>
     <label>공유 서버 (GitHub 데이터 저장소)</label>
     <input type="text" id="cfgRepo" placeholder="owner/repo — 예: jykim5215/houseman-os-data" value="${esc(c.repo || '')}">
     <label>액세스 토큰 (fine-grained PAT · 해당 저장소 Contents 읽기/쓰기만)</label>
@@ -511,6 +515,7 @@ $('#gearBtn').onclick = () => {
       <button class="btn" data-test>연결 테스트</button>
       <button class="btn" data-off>로컬 모드로</button>
       <button class="btn filled" data-save>저장</button></div>
+    </details>
     <hr style="border:none;border-top:1px solid var(--surface-2);margin:14px 0">
     <div class="meta">버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트 확인</button> · <button style="color:var(--accent)" data-theme-t>다크/라이트</button> · <button style="color:var(--danger)" data-reset>데이터 초기화(시드)</button></div>`);
   $('#sheetBody [data-theme-t]').onclick = toggleTheme;
@@ -528,6 +533,11 @@ $('#gearBtn').onclick = () => {
   };
   $('#sheetBody [data-upd]').onclick = checkUpdate;
   $('#sheetBody [data-reset]').onclick = () => { if (confirm('이 기기의 로컬 데이터를 시드로 초기화할까요?')) { Store.reset(); location.reload(); } };
+  $('#sheetBody [data-team]').onclick = async () => {
+    const cfg = await Store.Team.fetch();
+    if (!cfg) return alert('아직 팀 연결이 설정되지 않았습니다. 관리자가 seal.html로 team.json을 등록해야 합니다.');
+    unlockSheet(cfg);
+  };
 };
 
 $('#syncBtn').onclick = () => { if (Store.Sync.cfg) Store.Sync.pullPush(); else $('#gearBtn').click(); };
@@ -590,20 +600,43 @@ $('#updGo').onclick = async () => {
   location.reload();
 };
 
+/* ── 팀 연결 (공유가 기본) ── */
+async function teamOnboard() {
+  if (Store.Sync.cfg) return; // 이미 연결됨(기기에 저장된 토큰)
+  const cfg = await Store.Team.fetch();
+  if (!cfg) return; // 아직 team.json이 없으면 조용히 로컬로
+  unlockSheet(cfg);
+}
+function unlockSheet(cfg) {
+  sheet(`<h3>공유 서버 연결</h3>
+    <p class="meta" style="margin-bottom:4px">팀 암호를 입력하면 모든 근무자가 같은 데이터를 봅니다. 이 기기에서는 처음 한 번만 입력합니다.</p>
+    <label>팀 암호</label><input type="password" id="tpass" autocomplete="off" placeholder="관리자에게 받은 팀 암호">
+    <div id="tperr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
+    <div class="foot"><button class="btn" data-skip>로컬로 사용</button><button class="btn filled" data-ok>연결</button></div>`);
+  const go = async () => {
+    const p = $('#tpass').value.trim();
+    if (!p) return;
+    $('#tperr').textContent = '연결 중…';
+    try { await Store.Team.unlock(p, cfg); closeSheet(); refreshAll(); }
+    catch { $('#tperr').textContent = '암호가 올바르지 않습니다.'; }
+  };
+  $('#sheetBody [data-ok]').onclick = go;
+  $('#tpass').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  $('#sheetBody [data-skip]').onclick = closeSheet;
+}
+
 /* ── 시작 ── */
 (function init() {
   const th = localStorage.getItem('hos.theme');
   if (th) document.documentElement.dataset.theme = th;
   Store.load();
-  addMsg(`${new Date().getMonth() + 1}월 ${new Date().getDate()}일 · 하우스맨 노트`, 'datechip');
-  if (Store.worker) {
-    $('#workerChip').textContent = Store.worker + ' · 근무중';
-    briefingCard();
-  } else workerSheet(true);
+  if (Store.worker) $('#workerChip').textContent = Store.worker;
+  briefingCard();
   renderCounters();
   renderQuick();
   refreshHead();
   Store.Sync.onStatus(() => refreshHead());
   Store.Sync.onChange(() => { refreshAll(); });
   Store.Sync.start();
+  teamOnboard();
 })();

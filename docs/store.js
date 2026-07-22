@@ -280,9 +280,33 @@ const Store = (() => {
     };
   })();
 
+  /* ── 팀 연결코드: 공개 team.json의 암호화된 토큰을 팀 암호로 복호화 ── */
+  const b64ToBuf = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const Team = {
+    async fetch() {
+      try {
+        const r = await fetch('team.json?t=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) return null;
+        const j = await r.json();
+        return (j && j.ct) ? j : null;
+      } catch { return null; }
+    },
+    async unlock(passphrase, cfg) {
+      const enc = new TextEncoder();
+      const keyMat = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+      const key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: b64ToBuf(cfg.salt), iterations: cfg.iter || 200000, hash: 'SHA-256' },
+        keyMat, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBuf(cfg.iv) }, key, b64ToBuf(cfg.ct));
+      const token = new TextDecoder().decode(pt);
+      Sync.configure({ repo: cfg.repo, token, branch: cfg.branch || 'main', path: cfg.path || 'data/db.json' });
+      return token;
+    },
+  };
+
   return {
     load, persist, applyChanges, addRow, undo, find, seed,
-    Sync, uid, now, today, days, DEVICE,
+    Sync, Team, uid, now, today, days, DEVICE,
     get worker() { return localStorage.getItem(LS_WORKER) || null; },
     set worker(n) { localStorage.setItem(LS_WORKER, n); },
     reset() { localStorage.removeItem(LS_DB); db = null; },

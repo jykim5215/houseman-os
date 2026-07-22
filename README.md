@@ -12,15 +12,29 @@
 
 ## 공유 서버 (모두 같은 데이터 보기)
 
-근무 데이터는 이 공개 저장소에 저장하지 않는다. **비공개 저장소(`houseman-os-data`)를 데이터 서버로 사용**:
+근무 데이터·현장 카드(도어락 비번 등)는 이 공개 저장소에 저장하지 않고 **비공개 저장소(`houseman-os-data`)의 `data/db.json`** 에 둔다. 근무자는 **팀 암호 하나만** 입력하면 연결된다 — 토큰을 각자 붙일 필요가 없다.
 
-1. 관리자: GitHub → Settings → Developer settings → **Fine-grained personal access token** 발급
-   - Repository access: `houseman-os-data` 저장소 **하나만** 선택
-   - Permissions: **Contents → Read and write** 만 부여
-2. 각 근무자 휴대폰: 앱 우상단 ⚙ 설정 → 저장소 `jykim5215/houseman-os-data`와 토큰 입력 → 연결 테스트 → 저장
-3. 이후 30초마다 + 변경 직후 자동 동기화. 토큰을 입력하지 않으면 기기 로컬 모드로 동작한다.
+### 관리자: 최초 1회 봉인
+1. GitHub → Settings → Developer settings → **Fine-grained personal access token** 발급
+   - Repository access: `houseman-os-data` **하나만**
+   - Permissions: **Contents → Read and write** 만
+2. https://jykim5215.github.io/houseman-os/seal.html 접속(오프라인 동작) → 토큰 + 데이터 저장소 + **팀 암호** 입력 → "봉인하기"
+3. 출력된 JSON을 이 저장소의 **`docs/team.json`** 으로 커밋
+   - team.json에는 토큰이 **팀 암호로 암호화(AES-GCM + PBKDF2 20만회)** 되어 들어간다. 평문 토큰은 어디에도 안 남는다.
+4. 근무자들에게 **팀 암호**만 공유
 
-행 단위 최신-우선(last-write-wins) 병합이라 소규모 팀(수 명)에 적합하다. 실시간성이 더 필요해지면 Supabase 등으로 교체할 수 있게 동기화 계층(`docs/store.js`의 `Sync`)이 분리되어 있다.
+### 근무자: 첫 실행
+앱을 열면 "공유 서버 연결 — 팀 암호" 창이 뜬다. 팀 암호를 넣으면 끝. 이 기기에서는 다시 묻지 않는다. (암호를 모르면 "로컬로 사용" 가능)
+
+이후 30초마다 + 변경 직후 자동 동기화(행 단위 최신-우선 병합). ⚙ 설정에서 고급(저장소·토큰 직접 입력)도 가능하다. 실시간성이 더 필요해지면 Supabase 등으로 교체할 수 있게 동기화 계층(`docs/store.js`의 `Sync`)이 분리되어 있다.
+
+## 안드로이드 APK
+
+PWA(홈 화면 추가)가 가장 간단하지만, 설치형 APK도 제공한다.
+
+- 다운로드: 이 저장소 **Releases → `apk-latest` → `houseman-note.apk`** (휴대폰에서 내려받아 설치, "출처를 알 수 없는 앱" 허용 필요)
+- 빌드: **Actions → "Android APK 빌드" → Run workflow**. WebView 래퍼로 빌드되어 전체화면으로 동작한다. iPhone은 APK 대신 홈 화면 추가(PWA) 사용.
+- 안정적 업데이트(덮어쓰기 설치)를 원하면 첫 빌드의 `signing-keystore` 아티팩트를 받아 `ANDROID_KEYSTORE_B64`(base64), `ANDROID_KEYSTORE_PASSWORD` 시크릿으로 저장하면 이후 같은 키로 서명한다.
 
 ## 구조
 

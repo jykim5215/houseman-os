@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>팀 연결 봉인 — 하우스맨 노트(관리자)</title>
+<style>
+  body{font:15px/1.6 "Pretendard",system-ui,sans-serif;max-width:640px;margin:0 auto;padding:24px 18px 60px;color:#1b1f26;background:#f8f9fc}
+  h1{font-size:20px}
+  p{color:#444}
+  label{display:block;font-weight:600;font-size:13px;margin:16px 0 4px}
+  input,textarea{width:100%;padding:11px 13px;border:1px solid #d3d9e2;border-radius:10px;font:inherit;box-sizing:border-box}
+  button{margin-top:18px;background:#0b57d0;color:#fff;border:none;border-radius:999px;padding:12px 24px;font-weight:700;font-size:15px;cursor:pointer}
+  .out{margin-top:20px;background:#fff;border:1px solid #d3d9e2;border-radius:12px;padding:14px}
+  .out textarea{height:150px;font-family:ui-monospace,monospace;font-size:12px}
+  .warn{background:#fbebe9;color:#b3261e;border-radius:10px;padding:12px 14px;font-size:13px;margin-top:16px}
+  code{background:#eef1f6;padding:1px 6px;border-radius:5px;font-size:13px}
+  ol{padding-left:20px} li{margin:6px 0}
+</style>
+</head>
+<body>
+<h1>팀 연결 봉인 (관리자 전용)</h1>
+<p>근무자들이 <b>팀 암호</b> 하나로 공유 서버에 연결되게 만드는 도구입니다. 이 페이지는 <b>완전히 오프라인</b>으로 동작하며, 입력한 토큰은 이 기기 밖으로 전송되지 않습니다.</p>
+
+<div class="warn">
+  먼저 GitHub에서 <b>Fine-grained personal access token</b>을 발급하세요.<br>
+  · Repository access: <code>houseman-os-data</code> 저장소만<br>
+  · Permissions: <b>Contents → Read and write</b> 만
+</div>
+
+<label>GitHub 토큰 (github_pat_…)</label>
+<input id="tok" type="password" placeholder="발급한 fine-grained PAT">
+
+<label>데이터 저장소</label>
+<input id="repo" type="text" value="jykim5215/houseman-os-data">
+
+<label>팀 암호 (근무자에게 알려줄 암호 — 길고 추측 어렵게)</label>
+<input id="pass" type="text" placeholder="예: vivaldi-oak-2026-호수">
+
+<button onclick="seal()">봉인하기</button>
+
+<div class="out" id="out" style="display:none">
+  <label>아래 내용을 <code>docs/team.json</code> 파일로 저장·커밋하세요 (안전한 암호문입니다)</label>
+  <textarea id="json" readonly></textarea>
+  <p style="font-size:13px;color:#666">저장 후 근무자는 앱 첫 실행 때 위 <b>팀 암호</b>만 입력하면 자동으로 공유에 연결됩니다.</p>
+</div>
+
+<script>
+const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+async function seal(){
+  const token = document.getElementById('tok').value.trim();
+  const repo = document.getElementById('repo').value.trim();
+  const pass = document.getElementById('pass').value;
+  if(!token || !repo || !pass){ alert('토큰·저장소·팀 암호를 모두 입력하세요'); return; }
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iter = 200000;
+  const keyMat = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'}, keyMat, {name:'AES-GCM',length:256}, false, ['encrypt']);
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, enc.encode(token));
+  const out = { v:1, repo, branch:'main', path:'data/db.json', iter, salt:b64(salt), iv:b64(iv), ct:b64(ct) };
+  document.getElementById('json').value = JSON.stringify(out, null, 2);
+  document.getElementById('out').style.display = 'block';
+}
+</script>
+</body>
+</html>
