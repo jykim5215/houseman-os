@@ -1,6 +1,6 @@
 /* 하우스맨 노트 — UI (Style C: Command Chat) */
 'use strict';
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.3.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -36,7 +36,7 @@ function addMsg(html, cls) {
   d.scrollIntoView({ behavior: 'smooth', block: 'end' });
   return d;
 }
-const aiMsg = (who, body) => addMsg(`<div class="who"><span class="dot">H</span>${who}</div><div class="body">${body}</div>`);
+const aiMsg = (who, body) => addMsg(`${who ? `<div class="who"><span class="dot">H</span>${who}</div>` : ''}<div class="body">${body}</div>`);
 
 function citeChips(sources) {
   if (!sources || !sources.length) return '';
@@ -61,7 +61,7 @@ function briefingCard() {
 }
 
 function renderProposal(p) {
-  const m = aiMsg('승인형 편집 · 저장 전 확인', `
+  const m = aiMsg('', `
     <div class="proposal">
       <div class="head"><svg class="ic sm"><use href="#i-note"/></svg>변경 미리보기 — 승인 후에만 반영</div>
       <div class="prow"><b>${esc(p.summary)}</b>
@@ -91,7 +91,7 @@ function send(text) {
   const p = Logic.parseCommand(db(), text);
   if (p) {
     if (p.kind === 'proposal') return renderProposal(p);
-    if (p.kind === 'clarify') return aiMsg('되묻기', `❓ ${esc(p.question)}${p.candidates ? '<ul class="blist">' + p.candidates.map((c) => `<li>${esc(c)}</li>`).join('') + '</ul>' : ''}`);
+    if (p.kind === 'clarify') return aiMsg('', `${esc(p.question)}${p.candidates ? '<ul class="blist">' + p.candidates.map((c) => `<li>${esc(c)}</li>`).join('') + '</ul>' : ''}`);
     if (p.kind === 'loan') {
       const eqRow = db().equipment.find((e) => e.id === p.equipmentId);
       return renderProposal({
@@ -106,8 +106,8 @@ function send(text) {
   }
   const a = Logic.answer(db(), text);
   if (a.kind === 'briefing') return briefingCard();
-  if (a.refused) return aiMsg('근거 없음', `🤔 ${esc(a.internalText)}`);
-  aiMsg(`근거 ${a.sources.length}건`,
+  if (a.refused) return aiMsg('', esc(a.internalText));
+  aiMsg('',
     (a.customerText
       ? `<div class="dual"><div class="box cust"><span class="t">고객 안내용</span>${esc(a.customerText)}</div><div class="box"><span class="t">내부 참고 — 고객 노출 금지</span>${esc(a.internalText)}</div></div>`
       : esc(a.internalText)) +
@@ -229,9 +229,8 @@ function renderData() {
   let html = '';
 
   if (state.seg === 'stock') {
-    html += `<div class="toolrow"><div class="search">🔍<input id="dq" value="${esc(q)}" placeholder="품목·위치 검색"></div>
-      <button class="pill ${state.shortOnly ? 'tonal' : ''}" id="shortT">부족만</button>
-      <button class="pill" id="csvBtn">CSV 내보내기</button></div>`;
+    html += `<div class="toolrow"><div class="search"><input id="dq" value="${esc(q)}" placeholder="품목·위치 검색"></div>
+      <button class="pill ${state.shortOnly ? 'tonal' : ''}" id="shortT">부족만</button></div>`;
     d.stock.filter((s) => hit(s.item + s.location)).filter((s) => !state.shortOnly || s.qty < s.min).forEach((s) => {
       const cls = s.qty < s.min ? 'alarm' : s.qty < s.min * 1.2 ? 'warn2' : '';
       const st = s.qty < s.min ? '<span class="st d">부족</span>' : s.qty < s.min * 1.2 ? '<span class="st w">주의</span>' : '<span class="st k">정상</span>';
@@ -242,7 +241,7 @@ function renderData() {
   }
 
   if (state.seg === 'equipment') {
-    html += `<div class="toolrow"><div class="search">🔍<input id="dq" value="${esc(q)}" placeholder="번호·대여자 검색"></div></div>`;
+    html += `<div class="toolrow"><div class="search"><input id="dq" value="${esc(q)}" placeholder="번호·대여자 검색"></div></div>`;
     d.equipment.filter((e) => hit(e.label + (e.borrower || ''))).forEach((e) => {
       const [bk, bc] = BATT_KO[e.battery] || [e.battery, 'k'];
       const [ck, cc] = COND_KO[e.condition] || [e.condition, 'k'];
@@ -295,7 +294,6 @@ function renderData() {
   const dq = $('#dq');
   if (dq) dq.oninput = () => { state.q = dq.value; renderData(); setTimeout(() => { const x = $('#dq'); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }); };
   const st = $('#shortT'); if (st) st.onclick = () => { state.shortOnly = !state.shortOnly; renderData(); };
-  const cb = $('#csvBtn'); if (cb) cb.onclick = exportStockCsv;
   $$('#dataHost [data-qty]').forEach((b) => b.onclick = () => qtySheet(d.stock.find((s) => s.id === b.dataset.qty)));
   $$('#dataHost [data-lost]').forEach((b) => b.onclick = () => lostHandover(d.lost.find((l) => l.id === b.dataset.lost)));
   $$('#dataHost [data-eq]').forEach((b) => b.onclick = () => equipSheet(d.equipment.find((e) => e.id === b.dataset.eq)));
@@ -433,6 +431,25 @@ $('#briefGen').onclick = () => {
   $('#scBrief').classList.add('open');
 };
 $('#dailyBtn').onclick = exportDailyCsv;
+$('#stockCsvBtn').onclick = exportStockCsv;
+
+/* 현장 카드 (비번·전화번호 등 자주 찾는 정보 — 공유 서버에서 내려옴) */
+function renderQuick() {
+  const rows = db().quickref || [];
+  if (!rows.length) {
+    $('#quickBody').innerHTML = '<p class="meta">공유 서버(⚙ 설정)를 연결하면 린넨실 비밀번호·전화번호·창고 위치 등 현장 카드가 표시됩니다. 민감 정보라 기기 로컬에는 기본 포함되지 않습니다.</p>';
+    return;
+  }
+  const groups = new Map();
+  rows.forEach((r) => { if (!groups.has(r.cat)) groups.set(r.cat, []); groups.get(r.cat).push(r); });
+  let i = 0;
+  $('#quickBody').innerHTML = Array.from(groups.entries()).map(([cat, list]) => `
+    <details class="qgroup" ${i++ < 2 ? 'open' : ''}><summary>${esc(cat)}<span class="meta">${list.length}</span></summary>
+      ${list.map((r) => `<div class="qrow"><span class="ql">${esc(r.label)}</span>
+        ${r.value ? `<span class="qcode">${esc(r.value)}</span>` : ''}
+        ${r.note ? `<span class="qn">${esc(r.note)}</span>` : ''}</div>`).join('')}
+    </details>`).join('');
+}
 $('#logToggle').onclick = () => {
   const card = $('#logToggle').closest('.scard');
   card.classList.toggle('open');
@@ -495,7 +512,8 @@ $('#gearBtn').onclick = () => {
       <button class="btn" data-off>로컬 모드로</button>
       <button class="btn filled" data-save>저장</button></div>
     <hr style="border:none;border-top:1px solid var(--surface-2);margin:14px 0">
-    <div class="meta">버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트 확인</button> · <button style="color:var(--danger)" data-reset>데이터 초기화(시드)</button></div>`);
+    <div class="meta">버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트 확인</button> · <button style="color:var(--accent)" data-theme-t>다크/라이트</button> · <button style="color:var(--danger)" data-reset>데이터 초기화(시드)</button></div>`);
+  $('#sheetBody [data-theme-t]').onclick = toggleTheme;
   $('#sheetBody [data-save]').onclick = () => {
     const repo = $('#cfgRepo').value.trim(), token = $('#cfgTok').value.trim();
     if (!repo || !token) return alert('저장소와 토큰을 모두 입력하세요 (해제는 "로컬 모드로")');
@@ -513,11 +531,11 @@ $('#gearBtn').onclick = () => {
 };
 
 $('#syncBtn').onclick = () => { if (Store.Sync.cfg) Store.Sync.pullPush(); else $('#gearBtn').click(); };
-$('#themeBtn').onclick = () => {
+function toggleTheme() {
   const r = document.documentElement;
   r.dataset.theme = r.dataset.theme === 'dark' ? '' : 'dark';
   localStorage.setItem('hos.theme', r.dataset.theme);
-};
+}
 
 /* ── 헤더·상태 반영 ── */
 function refreshHead() {
@@ -533,6 +551,7 @@ function refreshHead() {
 function refreshAll() {
   renderCounters();
   if ($('#tab-data').classList.contains('on')) renderData();
+  renderQuick();
   refreshHead();
 }
 
@@ -582,6 +601,7 @@ $('#updGo').onclick = async () => {
     briefingCard();
   } else workerSheet(true);
   renderCounters();
+  renderQuick();
   refreshHead();
   Store.Sync.onStatus(() => refreshHead());
   Store.Sync.onChange(() => { refreshAll(); });

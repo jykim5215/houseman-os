@@ -1,5 +1,5 @@
 /* 하우스맨 노트 SW — 네트워크 우선 + 오프라인 캐시 폴백 (푸시 즉시 새 버전 반영) */
-const CACHE = 'hos-v0.2.0';
+const CACHE = 'hos-v0.3.0';
 const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'store.js', 'logic.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {

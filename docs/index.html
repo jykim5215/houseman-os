@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f8f9fc">
 <title>하우스맨 노트</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -43,7 +44,6 @@
   <div class="titles"><h1>하우스맨 노트</h1><div class="meta" id="hdMeta">로컬 모드</div></div>
   <div class="grow"></div>
   <button class="iconbtn" id="syncBtn" title="동기화"><svg class="ic"><use href="#i-sync"/></svg></button>
-  <button class="iconbtn" id="themeBtn" title="다크 모드"><svg class="ic"><use href="#i-theme"/></svg></button>
   <button class="iconbtn" id="gearBtn" title="설정"><svg class="ic"><use href="#i-gear"/></svg></button>
   <button class="pill tonal" id="workerChip">근무자</button>
 </header>
@@ -68,7 +68,6 @@
         <button class="rbtn" id="micBtn" title="음성 입력"><svg class="ic"><use href="#i-mic"/></svg></button>
         <button class="rbtn send" id="sendBtn"><svg class="ic"><use href="#i-send"/></svg></button>
       </div>
-      <div class="disclaim">등록된 소스·DB만 근거로 답합니다 · 수정은 승인 후에만 반영 · Undo 가능</div>
     </div>
   </div>
 
@@ -92,6 +91,11 @@
   <!-- 스튜디오 -->
   <div class="tabview" id="tab-studio">
     <div class="studio">
+      <div class="scard" id="scQuick">
+        <div class="top"><div class="icbox"><svg class="ic"><use href="#i-doc"/></svg></div>
+          <div><h3>현장 카드</h3><p>비밀번호 · 전화번호 · 창고 위치 등 자주 찾는 정보</p></div></div>
+        <div id="quickBody" style="margin-top:12px"></div>
+      </div>
       <div class="scard" id="scBrief">
         <div class="top"><div class="icbox"><svg class="ic"><use href="#i-brief"/></svg></div>
           <div><h3>교대 브리핑</h3><p>미반납·부족·하자·습득물·특이사항 자동 요약</p></div>
@@ -101,7 +105,7 @@
       <div class="scard">
         <div class="top"><div class="icbox"><svg class="ic"><use href="#i-report"/></svg></div>
           <div><h3>일일 마감 리포트</h3><p>당일 변경 요약 + 미해결 인계 — CSV 다운로드</p></div>
-          <button class="btn go" id="dailyBtn">내보내기</button></div>
+          <div class="go" style="display:flex;gap:7px"><button class="btn" id="stockCsvBtn">재고 CSV</button><button class="btn filled" id="dailyBtn">마감 CSV</button></div></div>
       </div>
       <div class="scard">
         <div class="top"><div class="icbox"><svg class="ic"><use href="#i-hist"/></svg></div>

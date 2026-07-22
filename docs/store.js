@@ -73,6 +73,9 @@ const Store = (() => {
         { id: 'src4', title: '습득물 처리 매뉴얼 v2', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: days(-30).slice(0, 10), updatedAt: days(-30).slice(0, 10), content: '귀중품(휴대폰, 지갑, 카드, 현금, 귀금속)은 발견 즉시 상황실 인계. 일반 습득물 보관 기한은 30일이며 기한 경과 시 경찰서 이관. 습득물 등록 시 사진 필수.' },
         { id: 'src5', title: '밴드 공지 정리본 (7월 2주)', origin: 'memo', priority: 4, custVisible: false, collectedAt: days(-3).slice(0, 10), updatedAt: days(-3).slice(0, 10), content: '무전기 충전기 2대 고장으로 B1 충전소만 사용. 카트 3호기 브레이크 점검 완료. 신규 입사자 교육 7/20 예정.' },
       ],
+      // 현장 카드(비번·전화번호 등): 민감 정보라 공개 코드에는 넣지 않는다.
+      // 실데이터는 비공개 데이터 저장소(db.json)에 있고 동기화로 내려온다.
+      quickref: [],
       audit: [],
     };
   }
@@ -83,6 +86,7 @@ const Store = (() => {
     if (db) return db;
     try { db = JSON.parse(localStorage.getItem(LS_DB)); } catch { db = null; }
     if (!db || !db.workers) { db = seed(); persist(); }
+    if (!db.quickref) { db.quickref = []; persist(); } // 구버전 로컬 DB 마이그레이션
     return db;
   }
   function persist() {
@@ -90,7 +94,7 @@ const Store = (() => {
     localStorage.setItem(LS_DB, JSON.stringify(db));
   }
 
-  const COLLECTIONS = { stock: 'stock', equipment: 'equipment', lost: 'lost', defects: 'defects', handover: 'handover', sources: 'sources' };
+  const COLLECTIONS = { stock: 'stock', equipment: 'equipment', lost: 'lost', defects: 'defects', handover: 'handover', sources: 'sources', quickref: 'quickref' };
   // 필드 화이트리스트 (임의 필드 수정 방지)
   const EDITABLE = {
     stock: ['qty', 'min', 'note', 'owner'],
@@ -99,6 +103,7 @@ const Store = (() => {
     defects: ['stage', 'detail', 'assignee', 'room', 'title'],
     handover: ['resolved', 'content'],
     sources: ['enabled', 'title', 'content', 'custVisible'],
+    quickref: ['cat', 'label', 'value', 'note'],
   };
 
   function find(entity, id) {
