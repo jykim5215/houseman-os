@@ -1,6 +1,6 @@
 /* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.6.1';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -300,7 +300,8 @@ function defectAddSheet() {
   $('#sheetBody [data-ok]').onclick = () => { const t = $('#dfT').value.trim(); if (!t) return alert('제목을 입력하세요'); Store.addRow('defects', { room: $('#dfR').value.trim(), title: t, detail: $('#dfD').value.trim(), stage: 'reported', assignee: W(), createdAt: Store.now() }, { worker: W() }); closeSheet(); refreshAll(); };
 }
 function renderSources() {
-  $('#srcList').innerHTML = Store.inBld('sources').map((s) => `<div class="srcitem"><input type="checkbox" data-src="${s.id}" ${s.enabled !== false ? 'checked' : ''}><svg class="ic sm" style="color:var(--dim)"><use href="#i-doc"/></svg><div><div class="tit">${esc(s.title)}</div><div class="meta">${['', '① 내부', '② VINFO', '③ 공식홈', '④ 메모'][s.priority] || ''} · ${s.custVisible ? '고객 안내 가능' : '내부 전용'}</div></div></div>`).join('') || `<div class="empty">등록된 소스가 없습니다.</div>`;
+  const list = Store.load().sources.filter((s) => s.bld === Store.bld || s.bld === '*');
+  $('#srcList').innerHTML = list.map((s) => `<div class="srcitem"><input type="checkbox" data-src="${s.id}" ${s.enabled !== false ? 'checked' : ''}><svg class="ic sm" style="color:var(--dim)"><use href="#i-doc"/></svg><div><div class="tit">${esc(s.title)}${s.bld === '*' ? ' <span class="st k">공통</span>' : ''}</div><div class="meta">${['', '① 내부', '② VINFO', '③ 공식홈', '④ 메모'][s.priority] || ''} · ${s.custVisible ? '고객 안내 가능' : '내부 전용'}</div></div></div>`).join('') || `<div class="empty">등록된 소스가 없습니다.</div>`;
   $$('#srcList [data-src]').forEach((c) => c.onchange = () => { Store.applyChanges([{ entity: 'sources', entityId: c.dataset.src, field: 'enabled', newValue: c.checked, reason: '참조 ' + (c.checked ? '켬' : '끔') }], { worker: W() }); });
 }
 $('#srcAddBtn').onclick = () => sheet(`<h3>지식 소스 추가 <span class="meta">· ${esc(bldName())}</span></h3>
@@ -534,6 +535,8 @@ function aiSheet() {
     <label>모델</label><select id="aim">${opts(c.provider)}</select>
     <label>API 키</label><input type="password" id="aik" placeholder="붙여넣기" value="${esc(c.key || '')}" autocomplete="off">
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;display:inline-block;margin-top:6px" id="aikeylink">→ 무료 Gemini 키 발급 (Google AI Studio)</a>
+    ${isAdmin() ? `<div class="checkrow"><input type="checkbox" id="aishare" ${Store.getSharedAI() ? 'checked' : ''}><label for="aishare" style="margin:0;font-size:13px;color:var(--text)">팀 전체에 공유 (모든 기기가 이 키로 자동 사용)</label></div>
+    <p class="meta" style="margin-top:4px">공유 시 키는 비공개 데이터 저장소에만 저장됩니다. 공용 무료 키 사용을 권장합니다.</p>` : ''}
     <div id="aierr" class="meta" style="min-height:16px;margin-top:6px"></div>
     <div class="foot"><button class="btn" data-off>사용 안 함</button><button class="btn" data-test>연결 테스트</button><button class="btn filled" data-ok>저장</button></div>`);
   $('#aip').onchange = () => {
@@ -550,7 +553,12 @@ function aiSheet() {
     catch (e) { $('#aierr').style.color = 'var(--danger)'; $('#aierr').textContent = e.message; }
     ev.target.textContent = '연결 테스트';
   };
-  $('#sheetBody [data-ok]').onclick = () => { const v = read(); if (!v.key) return alert('API 키를 입력하세요'); AI.configure(v); closeSheet(); };
+  $('#sheetBody [data-ok]').onclick = () => {
+    const v = read(); if (!v.key) return alert('API 키를 입력하세요');
+    AI.configure(v);
+    if (isAdmin()) { const share = $('#aishare'); if (share) Store.setSharedAI(share.checked ? v : null); }
+    closeSheet();
+  };
 }
 function unlockSheet(cfg) {
   sheet(`<h3>공유 서버 연결</h3><p class="meta">팀 암호를 입력하면 모든 근무자가 같은 데이터를 봅니다. 이 기기에서는 처음 한 번만.</p>
@@ -567,7 +575,8 @@ function refreshHead() {
   const st = Store.Sync.status, stKo = { local: '로컬', idle: '대기', syncing: '동기화 중', synced: '연결됨', error: '오류' }[st] || st;
   const sb = $('#syncBtn'); sb.classList.toggle('spin', st === 'syncing'); sb.classList.toggle('err', st === 'error'); sb.classList.toggle('okc', st === 'synced');
 }
-function refreshAll() { renderCounters(); if ($('#tab-data').classList.contains('on')) renderData(); if ($('#tab-talk').classList.contains('on')) renderFeed(); renderQuick(); refreshHead(); }
+function applySharedAI() { const s = Store.getSharedAI(); if (s && s.key && !AI.enabled()) AI.configure(s); }
+function refreshAll() { applySharedAI(); renderCounters(); if ($('#tab-data').classList.contains('on')) renderData(); if ($('#tab-talk').classList.contains('on')) renderFeed(); renderQuick(); refreshHead(); }
 
 /* ── 탭 ── */
 function go(t) { state.tab = t; $$('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabview').forEach((v) => v.classList.toggle('on', v.id === 'tab-' + t)); if (t === 'data') renderData(); if (t === 'talk') renderFeed(); }

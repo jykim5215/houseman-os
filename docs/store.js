@@ -26,7 +26,7 @@ const Store = (() => {
   ];
 
   /* ── 시드: 실제 업무 자료(현장 카드·지식 소스)만. 샘플 재고/장비/톡은 넣지 않는다. ── */
-  const SEED_VERSION = 6;
+  const SEED_VERSION = 7;
   function seed() {
     const db = {
       rev: 1, seedVersion: SEED_VERSION, updatedAt: now(),
@@ -39,14 +39,19 @@ const Store = (() => {
     return db;
   }
 
+  // 참고자료 시드 — 멱등: 이미 있는 id는 건너뜀(기존 기기도 매 로드 시 누락분만 추가)
   function seedReference(db) {
+    const S = (o) => { if (!db.sources.some((s) => s.id === o.id)) db.sources.push(o); };
     seedQuickB(db);
     // 지식 소스 (id 결정적 — 기기 간 동기화 시 중복 방지)
-    db.sources.push({ id: 'src-B-oak', bld: 'B', title: '오크동(B) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
+    S({ id: 'src-B-oak', bld: 'B', title: '오크동(B) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
       content: '오크동(B) 현장 참고. 매일: 16-20층 린넨실/복도 전자레인지 청소·점검, 퇴근 전 생수 수량 확인 후 보고, 밥솥 회수 시 세척 후 밀봉. 지정객실 2002·2035. 객실 타입: 3-15F 취사, 16-18F 세미취사(밥솥·주걱·밥그릇·찬접시 없음, 요청 시 투입), 19-20F 클린(취사 불가). 전자레인지 있는 층 16-20F. 층별 창고: 3F 테이블이불, 4F 추가침구, 5·8F 투입용 요솜, 6F 오리털이불·양모베개, 7F 침대패드·스커트, 13F 가전(밥솥·선풍기), 14F 가전(냉장고·열풍기), 17F 가구(소파·식탁의자). 에어컨: 1-5F LG(18,23), 6-10F 삼성(14,84), 11-12F LG, 13F 삼성, 14-20F LG. 카드키 매수: HOK 패밀리(4인) 6장, IOK 스위트(5인) 8장, COK 골드(7인) 10장+박스, 골드 6-10F 1·4호 총 10객실. 카드키 발급 절차: 재실고객 조회 → 영업장 02/객실번호 입력·조회 → 객실키 발급 → 발급기에 카드 올리고 신규/본실 발급 → 두 번째 카드 추가 발급. ※ 도어락 비밀번호와 내부 전화번호는 보안상 공유 서버에만 있습니다.' });
-    db.sources.push({ id: 'src-C-pine', bld: 'C', title: '파인동(C) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
+    S({ id: 'src-C-pine', bld: 'C', title: '파인동(C) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
       content: '파인동(C) 현장 참고. 컴퓨터 있는 층 3F·11F. 추가침구(추침)는 3층 창고에서 제작·보관. 객실 타입: 9-12F 세미취사(밥솥·밥그릇·주걱 미투입) — 오크동과 층이 다름. 식탁의자: 3-7F 일룸(1005), 8-12F 원목(나우의자), 2F 일룸 201·203~213·222·223, 2F 원목 202·214~217·220·221·224~226, 223호는 더블침대. 층별 창고: 3F 추침 제작·보관+컴퓨터, 4F T테이블·등받이·방석(소파), 5F 소파 프레임, 6F 식탁의자(2,9~12) 나우의자·소파 프레임, 7F TV·소파 프레임, 8F 식탁의자(3,9~12) 나우의자, 9F 선풍기, 11F 컴퓨터. 각층 린넨실 유지: 롤휴지 겉봉투 뜯기, 각티슈 1~2박스 뜯기, 냄비류·밥솥 회수 후 나머지 폐기(앵글 꼼꼼히), 대여용품(아기욕조·열풍기) 회수, 말통 교체는 수시로. 단체 입실 시: 재실내역 조회로 수시 최신화 → 최종 변동 객실 기준 진행 → 연타/칼·가위 투입, 연타 미리 확보, 파손품은 각층 창고로 이동. 놓치기 쉬운 것: 에어컨 사용 시 책상 밑 물통 확인, 식탁의자 파렛(교체) 확인, 재실내역 수시 최신화. ※ 습득물 비번 등 민감 정보와 직원 연락처는 보안상 공유 서버에만 있습니다.' });
-    db.sources.push({ id: 'src-eval', bld: 'B', title: '서비스 평가 기준 (공통)', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
+    // 비발디파크 공식 정보 (공개 정보, 전 동 공통) — bld:'*' 이면 모든 동에서 검색됨
+    S({ id: 'src-official-vp', bld: '*', title: '비발디파크 공식 안내 (소노 공식홈)', origin: 'official', priority: 3, custVisible: true, collectedAt: '2026-07-24', updatedAt: '2026-07-24', enabled: true,
+      content: '비발디파크(소노) 공식 안내. 운영사 (주)소노인터내셔널, 소노예약센터 1588-4888(09:00~18:00 연중무휴). 숙박 브랜드: 소노벨 비발디파크(A동/B·C동/D동), 소노캄 비발디파크, 소노펠리체, 소노펠리체 빌리지, 소노펫, 유스호스텔. 부대시설: 오션월드(워터파크), 스키월드, 스노위랜드, 골프장.\n[입퇴실] 입실 15:00~22:00, 22:00 이후 도착 시 프런트 사전 연락 필수. 퇴실 11:00까지. 객실 배정 12:00부터 선착순. 스마트 객실은 자율 퇴실.\n[조기 입실 요금 2026.06.01~] 14~15시 1박료 10%, 12~14시 30%, 09~12시 50%, 09시 이전 100% 추가. 당일 객실 상황에 따라 제한/불가.\n[객실 비품 차이] 리조트 취사객실=미취사 비품+전기레인지 등 조리비품. 리조트 미취사=전기포트·냉장고·식기, 타월·비누·샴푸·바디워시·드라이기 (칫솔·치약·헤어빗 미제공, 조리 불가). 호텔=전기포트·컵·접시·포크, 타월·비누·샴푸·컨디셔너·바디워시·칫솔·치약·헤어빗·드라이기+미니바 무료. 핵심 차이: 칫솔/치약/헤어빗·컨디셔너는 호텔만. 리조트 객실에 칫솔세트 요청 오면 미제공 품목 안내.\n[인원 추가] 대부분 사업장 1인 11,000원(요청 시 타월 제공). 소노캄 비발디파크(소노캄 A/A코너/B) 1인 50,000원(침구류 포함). 7세 미만/영유아 무료. 일부 객실 인원 추가 불가.\n[침구 추가] 대부분 침구세트당 25,000원(침구세트+타월 제공). 소노캄 비발디파크는 인원 추가 규정 적용(별도 침구 요금 미청구). 요점: 인원 추가=타월 추가, 침구 추가=침구세트+타월.\n[미성년자] 만 19세 미만 보호자 없이 이용 불가. 단독 숙박 시 미성년자 숙박동의서+보호자 신분증 사본+가족관계증명서/등본(주민뒷자리 마스킹) 제출, 이성 간 혼숙 금지.\n[스키 장비] 투숙 중 스키/보드 장비 객실 반입 시 시설 파손하면 변상 의무. 각 동 1층 로비 장비 락커 또는 시즌보관소 이용.\n[분실물] 보관 기간 1개월, 미인계분은 대명복지재단 기부. 등록: 공식홈 고객지원>분실물 센터(사업장·습득일·분류). 분류: 옷/모자/안경/우산, 물건/기타. ★프런트에 보관하지 않은 분실물은 보상 대상 아님(객실 귀중품은 고객 직접 관리 안내). 습득 시 습득일+30일 인계 기한, D-7 알림.\n[오션월드 복장] 수영복 필수, 머리 완전히 덮는 수영모/야구모/두건 필수, 아쿠아슈즈 의무(미착용 이용 불가), 안경·선글라스 금지(도수 물안경/렌즈 권장), 유아 방수기저귀. 면바지·청바지·썬캡·구두·운동화·등산화 불가. 태닝오일 후 입수 불가.\n[오션월드 음식] 외부 음식 반입 금지(무료 냉장보관). 예외: 밀폐용기 씨/껍질 제거 과일, 죽/미음 이유식·환자식, PET 음료. 유리용기 불가. 캔맥주 성인 1인 2캔·500ml 이하. 돗자리·캐리어·카트·버너·유모차 반입 불가.\n[오션월드 안전] 어트랙션 구명조끼 필수(바디슬라이드 등 제외), 튜브 재질 구명조끼 제한, 개인 튜브는 지름 1m 미만 원형만. 스노클링·풀페이스 수경·물총·오리발 불가. 얼리파크인 120cm 미만 어트랙션 제한. 락커·샤워실 촬영 금지. ★긴급방송 외 일행 찾기 방송 없음(일행 분실은 안내데스크 동행).\n[오션월드 대여요금] 구명조끼 8,000원, 타월 1,500원/장, 찜질복+타월 5,000원. 대인=중학생 이상, 소인=36개월~초등, 36개월 미만 무료(서류 제시).\n[스키월드] 슬로프 10면. 정설 매일 17:30~19:00. 심야스키 월→화 심야 정기 휴장. 안전헬멧 착용 의무(미착용 시 리프트/곤돌라 제한). 리프트권 3/5/7시간 타임패스. 대인 14세 이상/소인 13세 이하. 온라인 구매분도 매표소 방문. 렌탈: QR>동의·번호인증>신장·발사이즈>창구 수령. 숏스키·프리스타일 스키·알파인보드 대여 불가. 의류 렌탈 신분증 필수, 장갑·고글·모자는 구매만. 시즌권 실물 미소지 시 입장 불가, 재발급 수수료 20,000원.\n[스노위랜드] 메인센터 1층 입장권>2층 전용 곤돌라. 곤돌라 이동 후 외출 불가, 취사 불가. 개인 눈썰매 반입 가능하나 제동장치 있는 썰매 불가.\n[의무실] 비발디파크 스키장 의무실=메인센터 1층. 스노위랜드 의무실=스노위하우스 1층. 인근 응급실: 춘천 강원대병원 033-258-2000, 한림대병원 033-240-5000(각 편도 약 1시간).\n[취소 위약금 2025.07.01 입실분~] 8일 전 전액 환불. 성수기 금토연휴: 6~7일 전 20%, 4~5일 30~40%, 2~3일 60%, 1일 전 80%, 당일/노쇼 100%. 비수기 일~목은 2일 전까지 전액 환불. 위약금 면제 신청은 MY SONO>위약금 철회(입실일+30일 내), 노쇼는 철회 불가.\n[전기차] 충전소 전 지역 24시간. [모바일 회원카드] 앱 흔들기 또는 My SONO 바코드.\n[응대 원칙] 요금·환불·위약금은 하우스맨이 판단하지 않고 프런트/1588-4888 이관. 기록 없는 약속 금지(습득물·하자·인원추가는 시스템 등록 후 안내). 안전(부상·미아·시설파손)은 즉시 상급 보고+사진. 규정 외 요금 면제·할인 임의 약속 금지, 습득물 개인 보관/전달 금지, 고객 소지품 임의 이동 금지, 개인정보 외부 공유 금지.\n※ 요금·시즌 운영시간·휴장일은 변동성이 큼 — 확정 안내는 프런트/예약센터 확인.' });
+    S({ id: 'src-eval', bld: 'B', title: '서비스 평가 기준 (공통)', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
       content: '객실 하우스키핑 서비스 평가(Standard): SOP 60점 + 인적서비스 40점 = 100점. 판정 준수1/미준수2/관찰불가0, 미준수는 V 표시 후 감점. SOP 8항목: 1 전화 인사(소속·성명 명확, 벨 3번 전 수신, 초과 시 사과) 필수 5점, 2 방문인사(밝게 목례) 필수 5점, 3 퇴실 인사(밝은 표정 목례, 시간·상황에 맞는 인사말) 필수 5점, 4 고객 요구사항 확인(요청 확인, 객실번호·요청 복명복창, 추가 요청 확인, 추가 요금 안내) 필수 5점, 5 예상 방문 소요시간 안내(별도 요청 없으면 15분 내 방문, 초과 시 사과와 이유) 성과 7점, 6 객실 방문(초인종/노크 후 잘 보이는 위치 대기, 소속·용무 명확) 필수 5점, 7 물품 전달(두 손 가슴~배 높이, 양손 불가 시 목례와 공손히, 무거운 물품 사전 안내 후 객실 안쪽) 성과 7점, 8 추가 요청사항 확인(15분 내 재방문, 초과 시 소요시간 안내) 성과 7점. 인적 서비스 4항목: 전화 응대 표현(쉬운 용어·명확한 발음·표준어, 공손·정중, 적당한 말 빠르기, 미~파 톤, 적절한 억양), 표정(부드러운 미소 유지), 방문 응대 표현(동일 기준), 용모복장(청결·단정 유니폼, 깨끗한 신발, 헤어 단정 — 남 헤어제품 정돈, 여 단발은 보브컷·긴머리는 올림머리) 각 필수 5점.' });
   }
 
@@ -55,7 +60,7 @@ const Store = (() => {
   function seedQuickB(db) {
     const B = 'B';
     // id를 bld+cat+label로 결정적 생성 → 기기 간 동기화 시 같은 항목이 하나로 수렴
-    const q = (cat, label, value, note) => db.quickref.push({ id: `q-${B}-${cat}-${label}`, bld: B, cat, label, value, note: note || '' });
+    const q = (cat, label, value, note) => { const id = `q-${B}-${cat}-${label}`; if (!db.quickref.some((x) => x.id === id)) db.quickref.push({ id, bld: B, cat, label, value, note: note || '' }); };
     // 비번 등 민감 정보는 공개 코드에 시드하지 않음 — 공유 서버(비공개)에서 내려옴
     q('매일 체크', '전자레인지', '', '16–20층 린넨실·복도 매일 청소·점검');
     q('매일 체크', '생수 수량', '', '퇴근 전 16–20층 확인 후 보고');
@@ -72,7 +77,7 @@ const Store = (() => {
   }
   function seedQuickC(db) {
     const C = 'C';
-    const q = (cat, label, value, note) => db.quickref.push({ id: `q-${C}-${cat}-${label}`, bld: C, cat, label, value, note: note || '' });
+    const q = (cat, label, value, note) => { const id = `q-${C}-${cat}-${label}`; if (!db.quickref.some((x) => x.id === id)) db.quickref.push({ id, bld: C, cat, label, value, note: note || '' }); };
     q('핵심 메모', '컴퓨터 있는 층', '3F · 11F');
     q('핵심 메모', '추가침구(추침)', '3F 창고', '제작·보관');
     q('핵심 메모', '에어컨 사용 시', '', '책상 밑 물통 꼭 확인');
@@ -125,6 +130,14 @@ const Store = (() => {
     quickref: ['cat', 'label', 'value', 'note'],
     messages: ['text'],
   };
+
+  // 관리자가 넣은 AI 키를 팀 전체에 공유(비공개 저장소로만 동기화). 키는 사용자가 입력.
+  function setSharedAI(aiCfg) {
+    const d = load();
+    d.config = { ...(d.config || {}), aiShared: aiCfg || null, updatedAt: now() };
+    persist(); Sync.schedule();
+  }
+  function getSharedAI() { const c = load().config; return c && c.aiShared || null; }
 
   const bld = () => localStorage.getItem(LS_BLD) || 'B';
   const setBld = (b) => localStorage.setItem(LS_BLD, b);
@@ -312,7 +325,7 @@ const Store = (() => {
   return {
     load, persist, applyChanges, addRow, delRow, undo, find, seed,
     Sync, Team, Auth, uid, now, today, days, DEVICE, BUILDINGS,
-    inBld, clearOperational, resetSeed,
+    inBld, clearOperational, resetSeed, setSharedAI, getSharedAI,
     get bld() { return bld(); }, set bld(b) { setBld(b); },
     get worker() { return localStorage.getItem(LS_WORKER) || ''; },
     set worker(n) { localStorage.setItem(LS_WORKER, n); },

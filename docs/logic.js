@@ -111,7 +111,8 @@ const Logic = (() => {
   }
   function searchSources(text) {
     const toks = tokens(text); if (!toks.length) return [];
-    const enabled = Store.inBld('sources').filter((s) => s.enabled !== false);
+    const bld = Store.bld;
+    const enabled = Store.load().sources.filter((s) => (s.bld === bld || s.bld === '*') && s.enabled !== false);
     const hits = enabled.map((s) => ({ s, score: toks.reduce((a, t) => a + (s.content.includes(t) ? 1 : 0) + (s.title.includes(t) ? 0.5 : 0), 0) })).filter((x) => x.score > 0);
     hits.sort((a, b) => a.s.priority - b.s.priority || b.score - a.score);
     return hits.map((x) => x.s);
@@ -146,7 +147,7 @@ const Logic = (() => {
       습득물: Store.inBld('lost').map((l) => ({ id: l.id, 품목: l.desc, 객실: l.room || l.place, 귀중품: !!l.valuable, 상태: l.status, 기한: l.deadline })),
       하자: Store.inBld('defects').map((d) => ({ id: d.id, 객실: d.room, 제목: d.title, 단계: STAGE_KO[d.stage] || d.stage, 상세: clip(d.detail, 80) })),
       톡: Store.inBld('messages').slice(-25).map((m) => ({ id: m.id, 종류: m.type, 작성자: m.author, 내용: clip(m.text, 160), 시각: m.ts })),
-      자료: Store.inBld('sources').filter((s) => s.enabled !== false).map((s) => ({ 제목: s.title, 우선순위: s.priority, 고객안내가능: !!s.custVisible, 본문: clip(s.content, 2500) })),
+      자료: Store.load().sources.filter((s) => (s.bld === Store.bld || s.bld === '*') && s.enabled !== false).map((s) => ({ 제목: s.title, 우선순위: s.priority, 고객안내가능: !!s.custVisible, 본문: clip(s.content, 3000) })),
     };
   }
 
