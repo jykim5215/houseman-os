@@ -107,17 +107,24 @@ const Logic = (() => {
   }
 
   function tokens(text) {
-    return (text.match(/[가-힣A-Za-z0-9]{2,}/g) || []).map((t) => t.replace(/(은|는|이|가|을|를|의|에|로|까지|부터|이야|인가요|인가|해줘|알려줘|어때|뭐야)$/, '')).filter((t) => t.length >= 2);
+    return (text.match(/[가-힣A-Za-z0-9]{2,}/g) || []).map((t) => {
+      const s = t.replace(/(은|는|이|가|을|를|의|에|로|까지|부터|이야|인가요|인가|해줘|알려줘|어때|뭐야)$/, '');
+      return s.length >= 2 ? s : t; // 조사 떼서 1글자 되면 원형 유지 (있는→'있'X→'있는')
+    }).filter((t) => t.length >= 2);
   }
   // 자료에서 질문과 관련된 조각만 추출 (전체 나열 대신 핵심만)
   function extract(content, toks) {
     const frags = String(content).split(/\n+|(?<=[.。])\s+|(?<=다\.)\s*/).map((s) => s.trim()).filter((s) => s.length > 1);
-    const scored = frags.map((f) => ({ f, n: toks.reduce((a, t) => a + (f.includes(t) ? 1 : 0), 0) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
+    // 점수 높은 순, 동점이면 짧은(더 집중된) 조각 우선
+    const scored = frags.map((f) => ({ f, n: toks.reduce((a, t) => a + (f.includes(t) ? 1 : 0), 0) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n || a.f.length - b.f.length);
     const cut = (s) => (s.length > 180 ? s.slice(0, 180) + '…' : s);
     if (scored.length) {
       const max = scored[0].n;
-      // 최고 점수 조각만 (묻는 것과 가장 관련된 것) 최대 2개
-      return scored.filter((x) => x.n === max).slice(0, 2).map((x) => cut(x.f)).join('\n');
+      const best = scored.filter((x) => x.n === max);
+      const pick = [best[0]];
+      // 2번째는 동점이면서 충분히 짧을 때만 (장황한 나열 방지)
+      if (best[1] && best[1].f.length <= 80) pick.push(best[1]);
+      return pick.map((x) => cut(x.f)).join('\n');
     }
     return cut(frags[0] || String(content));
   }
