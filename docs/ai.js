@@ -7,7 +7,7 @@ const AI = (() => {
   const LS = 'hos.ai';
   const MODELS = {
     anthropic: ['claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
-    gemini: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    gemini: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'],
     openai: ['gpt-4.1-mini', 'gpt-4.1'],
   };
   const load = () => { try { return JSON.parse(localStorage.getItem(LS)) || null; } catch { return null; } };
@@ -56,9 +56,10 @@ const AI = (() => {
 
   async function callGemini(cfg, system, user) {
     const model = cfg.model || 'gemini-2.5-flash';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cfg.key)}`, {
+    // 키는 URL이 아니라 헤더로 (URL에 비밀 노출 금지)
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: user }] }],
