@@ -113,9 +113,13 @@ const Logic = (() => {
   function extract(content, toks) {
     const frags = String(content).split(/\n+|(?<=[.。])\s+|(?<=다\.)\s*/).map((s) => s.trim()).filter((s) => s.length > 1);
     const scored = frags.map((f) => ({ f, n: toks.reduce((a, t) => a + (f.includes(t) ? 1 : 0), 0) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
-    if (scored.length) return scored.slice(0, 3).map((x) => (x.f.length > 160 ? x.f.slice(0, 160) + '…' : x.f)).join('\n');
-    const first = frags[0] || String(content);
-    return first.length > 160 ? first.slice(0, 160) + '…' : first;
+    const cut = (s) => (s.length > 180 ? s.slice(0, 180) + '…' : s);
+    if (scored.length) {
+      const max = scored[0].n;
+      // 최고 점수 조각만 (묻는 것과 가장 관련된 것) 최대 2개
+      return scored.filter((x) => x.n === max).slice(0, 2).map((x) => cut(x.f)).join('\n');
+    }
+    return cut(frags[0] || String(content));
   }
   function searchSources(text) {
     const toks = tokens(text); if (!toks.length) return [];
