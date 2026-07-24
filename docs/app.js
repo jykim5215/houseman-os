@@ -1,6 +1,6 @@
 /* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.6.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -13,7 +13,8 @@ const BATT_KO = { ok: ['양호', 'k'], low: ['부족', 'w'], bad: ['불량', 'd'
 const COND_KO = { ok: ['정상', 'k'], broken: ['고장', 'd'], lost: ['분실', 'd'] };
 
 const state = { tab: 'chat', seg: 'stock', q: '', shortOnly: false, xp: null, chatMode: 'ask', talkType: 'text', pendingImg: null };
-const isAdmin = () => sessionStorage.getItem('hos.admin') === '1';
+const isAdmin = () => Store.Auth.isAdmin();
+const me = () => Store.Auth.current;
 
 /* ── 시트 ── */
 function sheet(html) { $('#sheetBody').innerHTML = html; $('#sheetbg').classList.remove('hide'); setTimeout(() => $('#sheet').classList.add('open'), 10); }
@@ -46,7 +47,11 @@ function renderProposal(p) {
   m.querySelector('[data-ok]').onclick = () => {
     try {
       const ids = Store.applyChanges(p.changes, { worker: W(), channel: 'ai' });
-      m.querySelector('.proposal').outerHTML = `<div class="okmsg">✅ <b>저장 완료</b> ${W() ? '· ' + esc(W()) : ''} <button class="btn" style="padding:3px 12px;font-size:11.5px" data-undo>↩ 취소</button></div>`;
+      const at = Store.now();
+      Store.addRow('messages', { type: 'done', author: W() || '관리자', text: p.summary, meta: { detail: (p.changes[0] && p.changes[0].reason) || '', at }, ts: at }, { worker: W() });
+      m.querySelector('.proposal').outerHTML = `<div class="okmsg">✅ <b>처리 완료</b> · ${esc(at.slice(11, 16))} ${W() ? '· ' + esc(W()) : ''}
+        <div class="meta" style="margin-top:4px">완료보고가 톡에 기록됐습니다</div>
+        <button class="btn" style="padding:3px 12px;font-size:11.5px;margin-top:6px" data-undo>↩ 취소</button></div>`;
       const ub = m.querySelector('[data-undo]'); if (ub) ub.onclick = () => { ids.slice().reverse().forEach((id) => { try { Store.undo(id, W()); } catch {} }); ub.outerHTML = '<span class="meta">복원됨</span>'; refreshAll(); };
       refreshAll();
     } catch (e) { alert(e.message); }
@@ -54,23 +59,76 @@ function renderProposal(p) {
   m.querySelector('[data-no]').onclick = () => { m.querySelector('.proposal').outerHTML = '<div class="body" style="border:none;box-shadow:none;padding:6px 0;color:var(--dim)">취소됨</div>'; };
 }
 
-function send(text) {
+const HELP = `이렇게 말해보세요.
+<ul class="blist">
+<li>현황: "부족한 재고", "미반납 장비", "오늘 브리핑", "습득물"</li>
+<li>자료: "린넨실 비번", "세미취사 층", "에어컨 코드" 등 등록된 자료 질문</li>
+<li>수정(관리자): "바스타올 30장 차감", "무전기 4번 배터리 불량", "1204호 아이폰 인계", "공지 초기화"</li>
+</ul>`;
+
+function needAdmin(runWhenAdmin) {
+  if (state.chatMode === 'admin' && isAdmin()) { runWhenAdmin(); return true; }
+  const m = aiMsg('', `이 요청은 <b>수정</b>이라 관리 모드에서만 실행됩니다.<div class="acts" style="display:flex;gap:8px;margin-top:8px"><button class="btn filled" data-go>관리 모드로 전환</button></div>`);
+  m.querySelector('[data-go]').onclick = () => requestAdmin(() => { setMode('admin'); runWhenAdmin(); });
+  return false;
+}
+
+function renderDelete(p) {
+  const m = aiMsg('', `<div class="proposal"><div class="head"><svg class="ic sm"><use href="#i-note"/></svg>삭제 미리보기 — 승인 후에만 반영</div>
+    <div class="prow"><b>${esc(p.summary)}</b>${p.preview ? `<span class="why">${p.preview.map((t) => esc(String(t).slice(0, 50))).join(' · ')}${p.ids.length > 5 ? ' 외' : ''}</span>` : ''}</div>
+    <div class="acts"><button class="btn filled" data-ok>승인하고 삭제</button><button class="btn" data-no>취소</button></div></div>`);
+  m.querySelector('[data-ok]').onclick = () => {
+    p.ids.forEach((id) => Store.delRow(p.entity, id));
+    m.querySelector('.proposal').outerHTML = `<div class="okmsg">✅ ${esc(p.summary)} 완료</div>`;
+    refreshAll();
+  };
+  m.querySelector('[data-no]').onclick = () => { m.querySelector('.proposal').outerHTML = '<div class="body" style="border:none;box-shadow:none;padding:6px 0;color:var(--dim)">취소됨</div>'; };
+}
+
+async function send(text) {
   text = (text || $('#inp').value).trim(); if (!text) return;
   $('#inp').value = ''; addMsg(esc(text), 'm-user');
+
   const p = Logic.parseCommand(text);
-  if (p && (p.kind === 'proposal')) {
-    if (state.chatMode !== 'admin') {
-      const m = aiMsg('', `이 요청은 <b>수정</b>이라 관리 모드에서만 실행할 수 있어요. <div class="acts" style="display:flex;gap:8px;margin-top:8px"><button class="btn filled" data-go>관리 모드로</button></div>`);
-      m.querySelector('[data-go]').onclick = () => { closeSheet(); requestAdmin(() => { setMode('admin'); renderProposal(p); }); };
-      return;
-    }
-    return renderProposal(p);
+  if (p) {
+    if (p.kind === 'help') return aiMsg('', HELP);
+    if (p.kind === 'proposal') return void needAdmin(() => renderProposal(p));
+    if (p.kind === 'delete') return void needAdmin(() => renderDelete(p));
+    if (p.kind === 'newNotice') return void needAdmin(() => {
+      const mm = aiMsg('', `<div class="proposal"><div class="head">공지 등록 미리보기</div><div class="prow"><b>${esc(p.text)}</b></div>
+        <div class="acts"><button class="btn filled" data-ok>등록</button><button class="btn" data-no>취소</button></div></div>`);
+      mm.querySelector('[data-ok]').onclick = () => {
+        Store.addRow('messages', { type: 'notice', author: W() || '관리자', text: p.text, ts: Store.now() }, { worker: W() });
+        mm.querySelector('.proposal').outerHTML = '<div class="okmsg">✅ 공지가 톡에 등록됐습니다</div>'; refreshAll();
+      };
+      mm.querySelector('[data-no]').onclick = () => { mm.querySelector('.proposal').outerHTML = '<div class="body" style="border:none;box-shadow:none;padding:6px 0;color:var(--dim)">취소됨</div>'; };
+    });
+    if (p.kind === 'clarify') return aiMsg('', `${esc(p.question)}${p.candidates ? '<ul class="blist">' + p.candidates.map((c) => `<li>${esc(c)}</li>`).join('') + '</ul>' : ''}`);
   }
-  if (p && p.kind === 'clarify') return aiMsg('', `${esc(p.question)}${p.candidates ? '<ul class="blist">' + p.candidates.map((c) => `<li>${esc(c)}</li>`).join('') + '</ul>' : ''}`);
+
   const a = Logic.answer(text);
   if (a.kind === 'briefing') return briefingCard();
-  if (a.refused) return aiMsg('', esc(a.internalText));
-  aiMsg('', (a.customerText ? `<div class="dual"><div class="box cust"><span class="t">고객 안내용</span>${esc(a.customerText)}</div><div class="box"><span class="t">내부 참고</span>${esc(a.internalText)}</div></div>` : esc(a.internalText)) + (a.conflict ? `<div class="conflict"><svg class="ic sm"><use href="#i-alert"/></svg><span>${esc(a.conflict)}</span></div>` : '') + citeChips(a.sources));
+  if (!a.refused) {
+    return aiMsg('', (a.customerText ? `<div class="dual"><div class="box cust"><span class="t">고객 안내용</span>${esc(a.customerText)}</div><div class="box"><span class="t">내부 참고</span>${esc(a.internalText)}</div></div>` : esc(a.internalText)) + (a.conflict ? `<div class="conflict"><svg class="ic sm"><use href="#i-alert"/></svg><span>${esc(a.conflict)}</span></div>` : '') + citeChips(a.sources));
+  }
+
+  // 규칙으로 못 풀면 LLM에게 (설정된 경우)
+  if (!AI.enabled()) return aiMsg('', `잘 이해하지 못했어요. ${HELP}<div class="meta" style="margin-top:6px">설정 ⚙에서 AI를 연결하면 자유로운 문장도 이해합니다.</div>`);
+  const thinking = aiMsg('', '<span class="meta">생각 중…</span>');
+  try {
+    const r = await AI.ask(text, Logic.snapshot());
+    thinking.remove();
+    if (r.kind === 'propose' && Array.isArray(r.changes) && r.changes.length) {
+      return void needAdmin(() => renderProposal({ summary: r.summary || '변경 제안', changes: r.changes.map((c) => ({ ...c, reason: r.reason || text })) }));
+    }
+    if (r.kind === 'delete' && Array.isArray(r.ids) && r.ids.length) {
+      return void needAdmin(() => renderDelete({ entity: r.entity || 'messages', ids: r.ids, summary: r.summary || '삭제', preview: [] }));
+    }
+    aiMsg('', esc(r.text || '답을 만들지 못했습니다.') + `<div class="meta" style="margin-top:6px">${esc(AI.providerName())}</div>`);
+  } catch (e) {
+    thinking.remove();
+    aiMsg('', `AI 호출에 실패했습니다: ${esc(e.message)}<div class="meta" style="margin-top:6px">설정 ⚙에서 키와 제공사를 확인하세요.</div>`);
+  }
 }
 $('#sendBtn').onclick = () => send();
 $('#inp').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
@@ -90,31 +148,16 @@ function setMode(m) {
 }
 $('#mAsk').onclick = () => setMode('ask');
 $('#mAdmin').onclick = () => { if (isAdmin()) setMode('admin'); else requestAdmin(() => setMode('admin')); };
+$('#inp').addEventListener('focus', () => { if (state.chatMode === 'admin' && !isAdmin()) setMode('ask'); });
 
 function requestAdmin(onOk) {
   if (isAdmin()) return onOk();
-  if (!Store.Admin.hasPin()) {
-    sheet(`<h3>관리자 PIN 설정</h3><p class="meta">처음이라 관리자 PIN을 정합니다. 이후 수정(관리) 모드 진입 시 필요합니다.</p>
-      <label>새 PIN (4자리 이상)</label><input type="password" id="p1" inputmode="numeric" placeholder="숫자 PIN">
-      <label>PIN 확인</label><input type="password" id="p2" inputmode="numeric">
-      <div class="foot"><button class="btn" data-c>취소</button><button class="btn filled" data-ok>설정</button></div>`);
-    $('#sheetBody [data-c]').onclick = closeSheet;
-    $('#sheetBody [data-ok]').onclick = async () => {
-      const a = $('#p1').value.trim(), b = $('#p2').value.trim();
-      if (a.length < 4) return alert('4자리 이상으로 정해주세요');
-      if (a !== b) return alert('PIN이 일치하지 않습니다');
-      await Store.Admin.setPin(a); sessionStorage.setItem('hos.admin', '1'); closeSheet(); onOk();
-    };
-    return;
-  }
-  sheet(`<h3>관리자 PIN</h3><p class="meta">수정(관리) 모드로 들어가려면 PIN을 입력하세요.</p>
-    <label>PIN</label><input type="password" id="pin" inputmode="numeric" placeholder="관리자 PIN" autocomplete="off">
-    <div id="pinerr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
-    <div class="foot"><button class="btn" data-c>취소</button><button class="btn filled" data-ok>확인</button></div>`);
+  const u = me();
+  sheet(`<h3>관리자 권한 필요</h3>
+    <p class="meta">${u ? esc(u.name) + '님은 <b>근무자</b> 계정이라 수정할 수 없습니다. 관리자 계정으로 로그인하세요.' : '로그인이 필요합니다.'}</p>
+    <div class="foot"><button class="btn" data-c>닫기</button><button class="btn filled" data-sw>다른 계정으로 로그인</button></div>`);
   $('#sheetBody [data-c]').onclick = closeSheet;
-  const go = async () => { if (await Store.Admin.verify($('#pin').value.trim())) { sessionStorage.setItem('hos.admin', '1'); closeSheet(); onOk(); } else $('#pinerr').textContent = 'PIN이 올바르지 않습니다.'; };
-  $('#sheetBody [data-ok]').onclick = go;
-  $('#pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  $('#sheetBody [data-sw]').onclick = () => { Store.Auth.logout(); closeSheet(); showLogin(); };
 }
 
 /* ── 카운터 ── */
@@ -165,6 +208,13 @@ function qtySheet(s) {
   $('#sheetBody [data-ok]').onclick = () => { if (val !== s.qty) Store.applyChanges([{ entity: 'stock', entityId: s.id, field: 'qty', newValue: val, reason: $('#qr').value.trim() || null }], { worker: W() }); closeSheet(); refreshAll(); };
 }
 
+/* 수정 흔적: 최근 수정 시각 · 수정자 */
+function stamp(r) {
+  if (!r || !r.updatedAt) return '';
+  const t = String(r.updatedAt).slice(5, 16).replace('-', '/');
+  return `<span class="editstamp">✎ ${esc(t)}${r.updatedBy ? ' · ' + esc(r.updatedBy) : ''}</span>`;
+}
+
 /* ── 데이터 ── */
 function renderData() {
   $$('#seg button').forEach((b) => b.classList.toggle('on', b.dataset.c === state.seg));
@@ -176,7 +226,7 @@ function renderData() {
     html += rows.map((s) => {
       const tk = Logic.tracked(s), cls = tk && s.qty < s.min ? 'alarm' : tk && s.qty < s.min * 1.2 ? 'warn2' : '';
       const st = !tk ? '' : s.qty < s.min ? '<span class="st d">부족</span>' : s.qty < s.min * 1.2 ? '<span class="st w">주의</span>' : '<span class="st k">정상</span>';
-      return `<div class="rowitem ${cls}"><div class="bodyc"><div class="tit">${esc(s.item)} ${st}</div><div class="sub">${esc(s.location)}${s.updatedBy ? ' · ' + esc(s.updatedBy) : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div><div class="qty">${s.qty}${tk ? `<small>/${s.min}</small>` : ''}</div><button class="act" data-qty="${s.id}">수정</button></div>`;
+      return `<div class="rowitem ${cls}"><div class="bodyc"><div class="tit">${esc(s.item)} ${st}</div><div class="sub">${esc(s.location)}${s.note ? ' · ' + esc(s.note) : ''}${stamp(s)}</div></div><div class="qty">${s.qty}${tk ? `<small>/${s.min}</small>` : ''}</div><button class="act" data-qty="${s.id}">수정</button></div>`;
     }).join('') || `<div class="empty">${bldName()}에 등록된 재고가 없습니다.${isAdmin() ? '' : ' 관리 모드에서 추가할 수 있어요.'}</div>`;
   }
   if (state.seg === 'equipment') {
@@ -185,18 +235,18 @@ function renderData() {
     html += rows.map((e) => {
       const [bk, bc] = BATT_KO[e.battery] || [e.battery, 'k'], [ck, cc] = COND_KO[e.condition] || [e.condition, 'k'];
       const overdue = e.borrower && e.dueAt && e.dueAt < Store.now();
-      return `<div class="rowitem ${overdue || e.condition !== 'ok' ? 'alarm' : e.battery === 'bad' ? 'warn2' : ''}"><div class="bodyc"><div class="tit">${esc(e.label)} <span class="st ${bc}">배터리 ${bk}</span> <span class="st ${cc}">${ck}</span>${overdue ? ' <span class="st d">미반납</span>' : ''}</div><div class="sub">${e.borrower ? esc(e.borrower) + ' · ' + esc(e.loanedAt || '') : '보관중'}${e.note ? ' · ' + esc(e.note) : ''}</div></div><button class="act" data-eq="${e.id}">관리</button></div>`;
+      return `<div class="rowitem ${overdue || e.condition !== 'ok' ? 'alarm' : e.battery === 'bad' ? 'warn2' : ''}"><div class="bodyc"><div class="tit">${esc(e.label)} <span class="st ${bc}">배터리 ${bk}</span> <span class="st ${cc}">${ck}</span>${overdue ? ' <span class="st d">미반납</span>' : ''}</div><div class="sub">${e.borrower ? esc(e.borrower) + ' · ' + esc(e.loanedAt || '') : '보관중'}${e.note ? ' · ' + esc(e.note) : ''}${stamp(e)}</div></div><button class="act" data-eq="${e.id}">관리</button></div>`;
     }).join('') || `<div class="empty">${bldName()}에 등록된 장비가 없습니다.</div>`;
   }
   if (state.seg === 'lost') {
     html += `<div class="fabrow"><button class="btn filled" id="lostAdd"><svg class="ic sm"><use href="#i-add"/></svg> 습득물 등록</button></div>`;
     const rows = Store.inBld('lost').filter((l) => hit(l.desc + (l.room || '') + (l.place || '')));
-    html += rows.map((l) => { const dd = Logic.dday(l.deadline), stored = l.status === 'stored'; return `<div class="rowitem ${stored && (l.valuable || dd <= 2) ? 'alarm' : stored && dd <= 5 ? 'warn2' : ''}"><div class="bodyc"><div class="tit">${esc(l.desc)} ${l.valuable ? '<span class="st d">귀중품</span>' : ''} ${stored ? '<span class="st w">보관중</span>' : '<span class="st k">인계 완료</span>'}</div><div class="sub">${esc(l.room || l.place || '')} · ${esc((l.foundAt || '').slice(5, 16))}${stored ? ` · ${l.valuable ? '즉시 인계' : 'D-' + Math.max(dd, 0)}` : ''}</div></div>${stored ? `<button class="act" data-lost="${l.id}">인계</button>` : ''}</div>`; }).join('') || `<div class="empty">습득물이 없습니다.</div>`;
+    html += rows.map((l) => { const dd = Logic.dday(l.deadline), stored = l.status === 'stored'; return `<div class="rowitem ${stored && (l.valuable || dd <= 2) ? 'alarm' : stored && dd <= 5 ? 'warn2' : ''}"><div class="bodyc"><div class="tit">${esc(l.desc)} ${l.valuable ? '<span class="st d">귀중품</span>' : ''} ${stored ? '<span class="st w">보관중</span>' : '<span class="st k">인계 완료</span>'}</div><div class="sub">${esc(l.room || l.place || '')} · ${esc((l.foundAt || '').slice(5, 16))}${stored ? ` · ${l.valuable ? '즉시 인계' : 'D-' + Math.max(dd, 0)}` : ''}${stamp(l)}</div></div>${stored ? `<button class="act" data-lost="${l.id}">인계</button>` : ''}</div>`; }).join('') || `<div class="empty">습득물이 없습니다.</div>`;
   }
   if (state.seg === 'defects') {
     html += `<div class="fabrow"><button class="btn filled" id="defAdd"><svg class="ic sm"><use href="#i-add"/></svg> 하자 접수</button></div>`;
     const rows = Store.inBld('defects');
-    html += rows.map((f) => { const idx = Logic.STAGES.indexOf(f.stage), stale = f.stage === 'transferred' && Logic.daysSince(f.updatedAt) >= 2, next = Logic.STAGES[idx + 1]; return `<div class="rowitem ${stale ? 'alarm' : f.stage !== 'done' && idx >= 2 ? 'warn2' : ''}"><div class="bodyc"><div class="tit">${esc(f.room || '')} ${esc(f.title)} <span class="st ${f.stage === 'done' ? 'k' : stale ? 'd' : idx >= 2 ? 'w' : 'i'}">${Logic.STAGE_KO[f.stage]}${stale ? ' · ' + Logic.daysSince(f.updatedAt) + '일' : ''}</span></div><div class="sub">${esc(f.detail || '')}${f.assignee ? ' · ' + esc(f.assignee) : ''}</div><div class="stage">${Logic.STAGES.slice(1).map((s, i) => `<i class="${i < idx ? 'done' : ''}"></i>`).join('')}</div></div>${next ? `<button class="act" data-def="${f.id}" data-next="${next}">→ ${Logic.STAGE_KO[next]}</button>` : ''}</div>`; }).join('') || `<div class="empty">진행 중 하자가 없습니다.</div>`;
+    html += rows.map((f) => { const idx = Logic.STAGES.indexOf(f.stage), stale = f.stage === 'transferred' && Logic.daysSince(f.updatedAt) >= 2, next = Logic.STAGES[idx + 1]; return `<div class="rowitem ${stale ? 'alarm' : f.stage !== 'done' && idx >= 2 ? 'warn2' : ''}"><div class="bodyc"><div class="tit">${esc(f.room || '')} ${esc(f.title)} <span class="st ${f.stage === 'done' ? 'k' : stale ? 'd' : idx >= 2 ? 'w' : 'i'}">${Logic.STAGE_KO[f.stage]}${stale ? ' · ' + Logic.daysSince(f.updatedAt) + '일' : ''}</span></div><div class="sub">${esc(f.detail || '')}${f.assignee ? ' · ' + esc(f.assignee) : ''}${stamp(f)}</div><div class="stage">${Logic.STAGES.slice(1).map((s, i) => `<i class="${i < idx ? 'done' : ''}"></i>`).join('')}</div></div>${next ? `<button class="act" data-def="${f.id}" data-next="${next}">→ ${Logic.STAGE_KO[next]}</button>` : ''}</div>`; }).join('') || `<div class="empty">진행 중 하자가 없습니다.</div>`;
   }
   host.innerHTML = html;
   const dq = $('#dq'); if (dq) dq.oninput = () => { state.q = dq.value; renderData(); setTimeout(() => { const x = $('#dq'); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }); };
@@ -282,7 +332,10 @@ function renderFeed() {
 }
 $$('#talkTypes button').forEach((b) => b.onclick = () => { state.talkType = b.dataset.t; $$('#talkTypes button').forEach((x) => x.classList.toggle('on', x === b)); $('#talkText').placeholder = b.dataset.t === 'done' ? '완료한 작업 (예: 812호 도어락 교체)' : b.dataset.t === 'notice' ? '공지 내용' : '메시지'; });
 $('#attachBtn').onclick = () => $('#fileInput').click();
-$('#fileInput').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; state.pendingImg = await compressImage(f); renderAttachPreview(); };
+$('#camBtn').onclick = () => $('#camInput').click();
+const onPick = async (e) => { const f = e.target.files[0]; if (!f) return; state.pendingImg = await compressImage(f); renderAttachPreview(); e.target.value = ''; };
+$('#fileInput').onchange = onPick;
+$('#camInput').onchange = onPick;
 function renderAttachPreview() {
   let p = $('#attachPreview');
   if (!state.pendingImg) { if (p) p.remove(); return; }
@@ -347,17 +400,75 @@ $('#bldBtn').onclick = () => {
   $$('#sheetBody [data-b]').forEach((btn) => btn.onclick = () => { Store.bld = btn.dataset.b; closeSheet(); renderBld(); $('#msgs').innerHTML = ''; briefingCard(); refreshAll(); });
 };
 
-/* ── 근무자(선택) ── */
-function workerSheet() {
-  sheet(`<h3>내 이름 <span class="meta">(선택)</span></h3><p class="meta">톡·감사 로그 표기용입니다. 로그인은 아닙니다.</p>
-    <div class="wlist">${db().workers.map((w) => `<button data-w="${esc(w)}">${esc(w)}</button>`).join('')}</div>
-    <label>직접 입력</label><input type="text" id="wn" value="${esc(W())}" placeholder="이름">
-    <div class="foot"><button class="btn" data-c>닫기</button><button class="btn filled" data-ok>저장</button></div>`);
-  const set = (n) => { Store.worker = n; $('#workerChip').textContent = n || '이름'; closeSheet(); };
-  $$('#sheetBody [data-w]').forEach((b) => b.onclick = () => set(b.dataset.w));
-  $('#sheetBody [data-c]').onclick = closeSheet; $('#sheetBody [data-ok]').onclick = () => set($('#wn').value.trim());
+/* ── 로그인 / 계정 ── */
+function showLogin() {
+  const users = Store.Auth.users();
+  if (!users.length) {
+    sheet(`<h3>관리자 계정 만들기</h3>
+      <p class="meta">처음 실행입니다. 관리자 계정을 하나 만들어 주세요. 근무자 계정은 이후 설정에서 추가합니다.</p>
+      <label>이름 *</label><input type="text" id="nu" placeholder="예: 김반장" autocomplete="off">
+      <label>비밀번호 * (4자 이상)</label><input type="password" id="np" autocomplete="new-password">
+      <div id="lerr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
+      <div class="foot"><button class="btn filled" data-ok style="width:100%">만들고 시작</button></div>`);
+    $('#sheetBody [data-ok]').onclick = async () => {
+      try {
+        await Store.Auth.create($('#nu').value, $('#np').value, 'admin');
+        await Store.Auth.login($('#nu').value.trim(), $('#np').value);
+        closeSheet(); afterLogin();
+      } catch (e) { $('#lerr').textContent = e.message; }
+    };
+    return;
+  }
+  sheet(`<h3>로그인</h3>
+    <label>이름</label><select id="lu">${users.map((u) => `<option value="${esc(u.name)}">${esc(u.name)}${u.role === 'admin' ? ' (관리자)' : ''}</option>`).join('')}</select>
+    <label>비밀번호</label><input type="password" id="lp" autocomplete="current-password">
+    <div id="lerr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
+    <div class="foot"><button class="btn filled" data-ok style="width:100%">로그인</button></div>`);
+  const go = async () => {
+    try { await Store.Auth.login($('#lu').value, $('#lp').value); closeSheet(); afterLogin(); }
+    catch (e) { $('#lerr').textContent = e.message; }
+  };
+  $('#sheetBody [data-ok]').onclick = go;
+  $('#lp').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
 }
-$('#workerChip').onclick = workerSheet;
+function afterLogin() {
+  const u = me();
+  $('#workerChip').textContent = u ? u.name + (u.role === 'admin' ? ' ·관리' : '') : '로그인';
+  $('#msgs').innerHTML = ''; briefingCard(); refreshAll();
+}
+$('#workerChip').onclick = () => {
+  const u = me();
+  if (!u) return showLogin();
+  sheet(`<h3>${esc(u.name)} <span class="meta">${u.role === 'admin' ? '관리자' : '근무자'}</span></h3>
+    ${isAdmin() ? `<label>계정 관리</label><div id="ulist"></div>
+      <button class="btn" data-add style="width:100%;margin-top:8px">＋ 근무자 계정 추가</button>` : '<p class="meta">수정 권한은 관리자 계정에만 있습니다.</p>'}
+    <div class="foot"><button class="btn" data-c>닫기</button><button class="btn danger" data-out>로그아웃</button></div>`);
+  $('#sheetBody [data-c]').onclick = closeSheet;
+  $('#sheetBody [data-out]').onclick = () => { Store.Auth.logout(); closeSheet(); showLogin(); };
+  if (isAdmin()) {
+    const draw = () => {
+      $('#ulist').innerHTML = Store.Auth.users().map((x) => `<div class="qrow"><span class="ql">${esc(x.name)}</span>
+        <span class="meta">${x.role === 'admin' ? '관리자' : '근무자'}</span>
+        ${x.id !== u.id ? `<button class="act" data-role="${x.id}" data-to="${x.role === 'admin' ? 'staff' : 'admin'}">${x.role === 'admin' ? '근무자로' : '관리자로'}</button>
+        <button class="act" data-del="${x.id}" style="border-color:var(--danger-line);color:var(--danger)">삭제</button>` : '<span class="meta">(나)</span>'}</div>`).join('');
+      $$('#ulist [data-role]').forEach((b) => b.onclick = () => { Store.Auth.setRole(b.dataset.role, b.dataset.to); draw(); });
+      $$('#ulist [data-del]').forEach((b) => b.onclick = () => { if (confirm('이 계정을 삭제할까요?')) { Store.Auth.remove(b.dataset.del); draw(); } });
+    };
+    draw();
+    $('#sheetBody [data-add]').onclick = () => {
+      sheet(`<h3>근무자 계정 추가</h3><label>이름 *</label><input type="text" id="au" autocomplete="off">
+        <label>비밀번호 * (4자 이상)</label><input type="password" id="ap" autocomplete="new-password">
+        <div class="checkrow"><input type="checkbox" id="aa"><label for="aa" style="margin:0;font-size:13.5px;color:var(--text)">관리자 권한 부여(수정 가능)</label></div>
+        <div id="aerr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
+        <div class="foot"><button class="btn" data-c>취소</button><button class="btn filled" data-ok>추가</button></div>`);
+      $('#sheetBody [data-c]').onclick = closeSheet;
+      $('#sheetBody [data-ok]').onclick = async () => {
+        try { await Store.Auth.create($('#au').value, $('#ap').value, $('#aa').checked ? 'admin' : 'staff'); closeSheet(); alert('계정이 추가됐습니다.'); }
+        catch (e) { $('#aerr').textContent = e.message; }
+      };
+    };
+  }
+};
 
 /* ── 설정 ── */
 function toggleTheme() { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? '' : 'dark'; localStorage.setItem('hos.theme', r.dataset.theme); document.querySelector('meta[name=theme-color]').content = r.dataset.theme === 'dark' ? '#1b1714' : '#faf7f2'; }
@@ -366,7 +477,8 @@ $('#gearBtn').onclick = () => {
   sheet(`<h3>설정</h3>
     <div class="qrow" style="padding:0 0 10px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${connected ? '연결됨' : '로컬 모드'}</span></div>
     <button class="btn filled" data-team style="width:100%;margin-bottom:8px">팀 암호로 연결</button>
-    <button class="btn" data-admin style="width:100%;margin-bottom:8px">${Store.Admin.hasPin() ? '관리자 PIN 변경' : '관리자 PIN 설정'}</button>
+    <div class="qrow" style="padding:8px 0 6px"><span class="ql">AI 도우미</span><span class="qcode" style="background:${AI.enabled() ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${AI.enabled() ? 'var(--ok)' : 'var(--dim)'}">${esc(AI.providerName())}</span></div>
+    <button class="btn" data-ai style="width:100%;margin-bottom:8px">AI 연결 설정</button>
     <details style="margin:8px 0"><summary class="meta" style="cursor:pointer;padding:6px 0">데이터 초기화</summary>
       <button class="btn" data-clear style="width:100%;margin:6px 0">예시 데이터 비우기 (빈 상태로 시작)</button>
       <button class="btn danger" data-reseed style="width:100%">예시 데이터로 되돌리기</button>
@@ -378,7 +490,7 @@ $('#gearBtn').onclick = () => {
     <hr style="border:none;border-top:1px solid var(--surface-2);margin:12px 0">
     <div class="meta">버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트 확인</button> · <button style="color:var(--accent)" data-th>다크/라이트</button></div>`);
   $('#sheetBody [data-team]').onclick = async () => { const cfg = await Store.Team.fetch(); if (!cfg) return alert('아직 팀 연결이 설정되지 않았습니다. 관리자가 seal.html로 team.json을 등록해야 합니다.'); unlockSheet(cfg); };
-  $('#sheetBody [data-admin]').onclick = () => { sessionStorage.removeItem('hos.admin'); if (Store.Admin.hasPin()) requestAdmin(() => setPinSheet()); else setPinSheet(); };
+  $('#sheetBody [data-ai]').onclick = aiSheet;
   $('#sheetBody [data-clear]').onclick = () => reqEdit(() => { if (confirm(`${bldName()} 포함 모든 동의 재고·장비·습득물·하자·톡·로그를 비웁니다. 계속할까요?`)) { Store.clearOperational(); closeSheet(); refreshAll(); $('#msgs').innerHTML = ''; briefingCard(); } });
   $('#sheetBody [data-reseed]').onclick = () => reqEdit(() => { if (confirm('예시 데이터로 되돌립니다(현재 데이터 삭제). 계속할까요?')) { Store.resetSeed(); location.reload(); } });
   $('#sheetBody [data-save]').onclick = () => { const repo = $('#cfgRepo').value.trim(), token = $('#cfgTok').value.trim(); if (!repo || !token) return alert('저장소와 토큰을 입력하세요'); Store.Sync.configure({ repo, token, branch: 'main', path: 'data/db.json' }); closeSheet(); refreshHead(); };
@@ -386,12 +498,29 @@ $('#gearBtn').onclick = () => {
   $('#sheetBody [data-upd]').onclick = checkUpdate;
   $('#sheetBody [data-th]').onclick = toggleTheme;
 };
-function setPinSheet() {
-  sheet(`<h3>관리자 PIN ${Store.Admin.hasPin() ? '변경' : '설정'}</h3>
-    <label>새 PIN (4자리 이상)</label><input type="password" id="p1" inputmode="numeric"><label>PIN 확인</label><input type="password" id="p2" inputmode="numeric">
-    <div class="foot"><button class="btn" data-c>취소</button><button class="btn filled" data-ok>저장</button></div>`);
-  $('#sheetBody [data-c]').onclick = closeSheet;
-  $('#sheetBody [data-ok]').onclick = async () => { const a = $('#p1').value.trim(), b = $('#p2').value.trim(); if (a.length < 4) return alert('4자리 이상'); if (a !== b) return alert('일치하지 않습니다'); await Store.Admin.setPin(a); sessionStorage.setItem('hos.admin', '1'); closeSheet(); alert('관리자 PIN이 저장됐습니다.'); };
+function aiSheet() {
+  const c = AI.cfg || { provider: 'anthropic', model: 'claude-opus-4-8', key: '' };
+  const opts = (p) => AI.MODELS[p].map((m) => `<option value="${m}" ${m === c.model ? 'selected' : ''}>${m}</option>`).join('');
+  sheet(`<h3>AI 연결</h3>
+    <p class="meta">키는 <b>이 기기에만</b> 저장되고 선택한 제공사로만 전송됩니다. 연결하면 정해진 문장이 아니어도 자유롭게 묻고 지시할 수 있습니다.</p>
+    <label>제공사</label><select id="aip">
+      <option value="anthropic" ${c.provider === 'anthropic' ? 'selected' : ''}>Claude (Anthropic)</option>
+      <option value="gemini" ${c.provider === 'gemini' ? 'selected' : ''}>Gemini (Google)</option>
+      <option value="openai" ${c.provider === 'openai' ? 'selected' : ''}>OpenAI</option></select>
+    <label>모델</label><select id="aim">${opts(c.provider)}</select>
+    <label>API 키</label><input type="password" id="aik" placeholder="직접 붙여넣기" value="${esc(c.key || '')}" autocomplete="off">
+    <div id="aierr" class="meta" style="min-height:16px;margin-top:6px"></div>
+    <div class="foot"><button class="btn" data-off>사용 안 함</button><button class="btn" data-test>연결 테스트</button><button class="btn filled" data-ok>저장</button></div>`);
+  $('#aip').onchange = () => { $('#aim').innerHTML = AI.MODELS[$('#aip').value].map((m) => `<option value="${m}">${m}</option>`).join(''); };
+  const read = () => ({ provider: $('#aip').value, model: $('#aim').value, key: $('#aik').value.trim() });
+  $('#sheetBody [data-off]').onclick = () => { AI.configure(null); closeSheet(); };
+  $('#sheetBody [data-test]').onclick = async (ev) => {
+    ev.target.textContent = '확인 중…';
+    try { await AI.test(read()); $('#aierr').style.color = 'var(--ok)'; $('#aierr').textContent = '✓ 연결 성공'; }
+    catch (e) { $('#aierr').style.color = 'var(--danger)'; $('#aierr').textContent = e.message; }
+    ev.target.textContent = '연결 테스트';
+  };
+  $('#sheetBody [data-ok]').onclick = () => { const v = read(); if (!v.key) return alert('API 키를 입력하세요'); AI.configure(v); closeSheet(); };
 }
 function unlockSheet(cfg) {
   sheet(`<h3>공유 서버 연결</h3><p class="meta">팀 암호를 입력하면 모든 근무자가 같은 데이터를 봅니다. 이 기기에서는 처음 한 번만.</p>
@@ -425,8 +554,10 @@ $('#updGo').onclick = async () => { if ('serviceWorker' in navigator) { const rs
 (function init() {
   const th = localStorage.getItem('hos.theme'); if (th) { document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]').content = th === 'dark' ? '#1b1714' : '#faf7f2'; }
   Store.load(); renderBld();
-  if (W()) $('#workerChip').textContent = W();
-  setMode('ask'); briefingCard(); renderCounters(); renderQuick(); refreshHead();
+  setMode('ask'); renderCounters(); renderQuick(); refreshHead();
   Store.Sync.onStatus(() => refreshHead()); Store.Sync.onChange(() => refreshAll()); Store.Sync.start();
-  (async () => { if (!Store.Sync.cfg) { const cfg = await Store.Team.fetch(); if (cfg) unlockSheet(cfg); } })();
+  const u = me();
+  if (u) { $('#workerChip').textContent = u.name + (u.role === 'admin' ? ' ·관리' : ''); briefingCard(); }
+  else { $('#workerChip').textContent = '로그인'; showLogin(); }
+  (async () => { if (!Store.Sync.cfg) { const cfg = await Store.Team.fetch(); if (cfg && !me()) return; if (cfg) unlockSheet(cfg); } })();
 })();

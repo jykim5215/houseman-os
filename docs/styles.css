@@ -171,6 +171,7 @@ ul.blist .tag{flex:none;font-size:10.5px;font-weight:700;border-radius:999px;pad
 .rowitem .bodyc{flex:1;min-width:0}
 .rowitem .tit{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .rowitem .sub{font-size:11.5px;color:var(--dim);margin-top:2px}
+.editstamp{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--text-2);font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums}
 .rowitem .qty{font-variant-numeric:tabular-nums;font-weight:800;font-size:17px;text-align:right}
 .rowitem .qty small{font-weight:500;color:var(--dim);font-size:11px}
 .rowitem .act{color:var(--accent);font-weight:700;font-size:12.5px;flex:none;padding:7px 12px;border-radius:999px;border:1px solid var(--accent-line)}

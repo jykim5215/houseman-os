@@ -50,6 +50,22 @@ const Logic = (() => {
   }
 
   function parseCommand(text) {
+    // 공지/메시지 삭제·초기화
+    if (/(공지|메시지|톡|대화)/.test(text) && /(초기화|비우|지워|삭제|정리|없애)/.test(text)) {
+      const onlyNotice = /공지/.test(text) && !/(메시지|톡|대화)/.test(text);
+      const targets = Store.inBld('messages').filter((m) => onlyNotice ? m.type === 'notice' : true);
+      if (!targets.length) return { kind: 'clarify', question: onlyNotice ? '이 동에 공지가 없습니다.' : '지울 메시지가 없습니다.' };
+      return { kind: 'delete', entity: 'messages', ids: targets.map((m) => m.id),
+        summary: `${onlyNotice ? '공지' : '톡 메시지'} ${targets.length}건 삭제`,
+        preview: targets.slice(0, 5).map((m) => (m.type === 'notice' ? '[공지] ' : '') + (m.text || '(사진)')) };
+    }
+    // 공지 등록
+    const nm = text.match(/^(?:공지|알림)\s*[:：]?\s*(.+?)\s*(?:등록|올려|추가|해줘|해라)?$/);
+    if (nm && /(공지|알림)/.test(text) && nm[1] && nm[1].length > 3 && !/(초기화|지워|삭제|뭐|알려|있어)/.test(text)) {
+      return { kind: 'newNotice', text: nm[1].trim(), summary: `공지 등록: ${nm[1].trim()}` };
+    }
+    if (/(뭐.*할 수|무엇을 할|도움말|어떻게 써|사용법|기능)/.test(text)) return { kind: 'help' };
+
     const eq = text.match(/무전기\s*(\d+)\s*번?\s*(.*)/);
     if (eq) {
       const row = Store.inBld('equipment').find((e) => e.label === `무전기 ${eq[1]}번`);
@@ -118,5 +134,21 @@ const Logic = (() => {
       sources: rs.slice(0, 3).map((r, i) => ({ type: 'doc', n: i + 1, id: r.id, title: r.title, meta: `${['', '① 내부', '② VINFO', '③ 공식홈', '④ 메모'][r.priority] || ''} · ${(r.collectedAt || '').slice(0, 10)}${r.custVisible ? ' · 고객 안내 가능' : ' · 내부'}`, snippet: clip(r.content) })) };
   }
 
-  return { statusBoard, briefing, parseCommand, answer, searchSources, dday, daysSince, tracked, STAGES, STAGE_KO };
+  /* AI에 넘길 현재 동 데이터 스냅샷 (개인 연락처 등은 제외) */
+  function snapshot() {
+    const b = Store.buildings().find((x) => x.id === Store.bld);
+    const clip = (s, n) => String(s || '').slice(0, n);
+    return {
+      동: (b && b.name) || Store.bld,
+      오늘: now().slice(0, 16),
+      재고: Store.inBld('stock').map((s) => ({ id: s.id, 품목: s.item, 위치: s.location, 수량: s.qty, 최소: s.min, 정량없음: !tracked(s), 비고: clip(s.note, 60) })),
+      장비: Store.inBld('equipment').map((e) => ({ id: e.id, 이름: e.label, 배터리: e.battery, 상태: e.condition, 대여자: e.borrower, 대여시각: e.loanedAt, 비고: clip(e.note, 60) })),
+      습득물: Store.inBld('lost').map((l) => ({ id: l.id, 품목: l.desc, 객실: l.room || l.place, 귀중품: !!l.valuable, 상태: l.status, 기한: l.deadline })),
+      하자: Store.inBld('defects').map((d) => ({ id: d.id, 객실: d.room, 제목: d.title, 단계: STAGE_KO[d.stage] || d.stage, 상세: clip(d.detail, 80) })),
+      톡: Store.inBld('messages').slice(-25).map((m) => ({ id: m.id, 종류: m.type, 작성자: m.author, 내용: clip(m.text, 160), 시각: m.ts })),
+      자료: Store.inBld('sources').filter((s) => s.enabled !== false).map((s) => ({ 제목: s.title, 우선순위: s.priority, 고객안내가능: !!s.custVisible, 본문: clip(s.content, 2500) })),
+    };
+  }
+
+  return { statusBoard, briefing, parseCommand, answer, searchSources, snapshot, dday, daysSince, tracked, STAGES, STAGE_KO };
 })();
