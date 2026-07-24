@@ -41,12 +41,12 @@ const Store = (() => {
 
   function seedReference(db) {
     seedQuickB(db);
-    // 지식 소스
-    db.sources.push({ id: uid('src'), bld: 'B', title: '오크동(B) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
+    // 지식 소스 (id 결정적 — 기기 간 동기화 시 중복 방지)
+    db.sources.push({ id: 'src-B-oak', bld: 'B', title: '오크동(B) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
       content: '오크동(B) 현장 참고. 매일: 16-20층 린넨실/복도 전자레인지 청소·점검, 퇴근 전 생수 수량 확인 후 보고, 밥솥 회수 시 세척 후 밀봉. 지정객실 2002·2035. 객실 타입: 3-15F 취사, 16-18F 세미취사(밥솥·주걱·밥그릇·찬접시 없음, 요청 시 투입), 19-20F 클린(취사 불가). 전자레인지 있는 층 16-20F. 층별 창고: 3F 테이블이불, 4F 추가침구, 5·8F 투입용 요솜, 6F 오리털이불·양모베개, 7F 침대패드·스커트, 13F 가전(밥솥·선풍기), 14F 가전(냉장고·열풍기), 17F 가구(소파·식탁의자). 에어컨: 1-5F LG(18,23), 6-10F 삼성(14,84), 11-12F LG, 13F 삼성, 14-20F LG. 카드키 매수: HOK 패밀리(4인) 6장, IOK 스위트(5인) 8장, COK 골드(7인) 10장+박스, 골드 6-10F 1·4호 총 10객실. 카드키 발급 절차: 재실고객 조회 → 영업장 02/객실번호 입력·조회 → 객실키 발급 → 발급기에 카드 올리고 신규/본실 발급 → 두 번째 카드 추가 발급. ※ 도어락 비밀번호와 내부 전화번호는 보안상 공유 서버에만 있습니다.' });
-    db.sources.push({ id: uid('src'), bld: 'C', title: '파인동(C) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
+    db.sources.push({ id: 'src-C-pine', bld: 'C', title: '파인동(C) 하우스맨 업무 카드', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
       content: '파인동(C) 현장 참고. 컴퓨터 있는 층 3F·11F. 추가침구(추침)는 3층 창고에서 제작·보관. 객실 타입: 9-12F 세미취사(밥솥·밥그릇·주걱 미투입) — 오크동과 층이 다름. 식탁의자: 3-7F 일룸(1005), 8-12F 원목(나우의자), 2F 일룸 201·203~213·222·223, 2F 원목 202·214~217·220·221·224~226, 223호는 더블침대. 층별 창고: 3F 추침 제작·보관+컴퓨터, 4F T테이블·등받이·방석(소파), 5F 소파 프레임, 6F 식탁의자(2,9~12) 나우의자·소파 프레임, 7F TV·소파 프레임, 8F 식탁의자(3,9~12) 나우의자, 9F 선풍기, 11F 컴퓨터. 각층 린넨실 유지: 롤휴지 겉봉투 뜯기, 각티슈 1~2박스 뜯기, 냄비류·밥솥 회수 후 나머지 폐기(앵글 꼼꼼히), 대여용품(아기욕조·열풍기) 회수, 말통 교체는 수시로. 단체 입실 시: 재실내역 조회로 수시 최신화 → 최종 변동 객실 기준 진행 → 연타/칼·가위 투입, 연타 미리 확보, 파손품은 각층 창고로 이동. 놓치기 쉬운 것: 에어컨 사용 시 책상 밑 물통 확인, 식탁의자 파렛(교체) 확인, 재실내역 수시 최신화. ※ 습득물 비번 등 민감 정보와 직원 연락처는 보안상 공유 서버에만 있습니다.' });
-    db.sources.push({ id: uid('src'), bld: 'B', title: '서비스 평가 기준 (공통)', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
+    db.sources.push({ id: 'src-eval', bld: 'B', title: '서비스 평가 기준 (공통)', origin: 'internal_notice', priority: 1, custVisible: false, collectedAt: today(), updatedAt: today(), enabled: true,
       content: '객실 하우스키핑 서비스 평가(Standard): SOP 60점 + 인적서비스 40점 = 100점. 판정 준수1/미준수2/관찰불가0, 미준수는 V 표시 후 감점. SOP 8항목: 1 전화 인사(소속·성명 명확, 벨 3번 전 수신, 초과 시 사과) 필수 5점, 2 방문인사(밝게 목례) 필수 5점, 3 퇴실 인사(밝은 표정 목례, 시간·상황에 맞는 인사말) 필수 5점, 4 고객 요구사항 확인(요청 확인, 객실번호·요청 복명복창, 추가 요청 확인, 추가 요금 안내) 필수 5점, 5 예상 방문 소요시간 안내(별도 요청 없으면 15분 내 방문, 초과 시 사과와 이유) 성과 7점, 6 객실 방문(초인종/노크 후 잘 보이는 위치 대기, 소속·용무 명확) 필수 5점, 7 물품 전달(두 손 가슴~배 높이, 양손 불가 시 목례와 공손히, 무거운 물품 사전 안내 후 객실 안쪽) 성과 7점, 8 추가 요청사항 확인(15분 내 재방문, 초과 시 소요시간 안내) 성과 7점. 인적 서비스 4항목: 전화 응대 표현(쉬운 용어·명확한 발음·표준어, 공손·정중, 적당한 말 빠르기, 미~파 톤, 적절한 억양), 표정(부드러운 미소 유지), 방문 응대 표현(동일 기준), 용모복장(청결·단정 유니폼, 깨끗한 신발, 헤어 단정 — 남 헤어제품 정돈, 여 단발은 보브컷·긴머리는 올림머리) 각 필수 5점.' });
   }
 
@@ -54,8 +54,9 @@ const Store = (() => {
   // 그 값들은 비공개 데이터 저장소(data/db.json)에만 두고 공유 서버 연결 시 내려온다.
   function seedQuickB(db) {
     const B = 'B';
-    const q = (cat, label, value, note) => db.quickref.push({ id: uid('q'), bld: B, cat, label, value, note: note || '' });
-    q('비밀번호', '린넨실 도어락 · 창고', '', '민감 정보 — 공유 서버 연결 시 표시됩니다');
+    // id를 bld+cat+label로 결정적 생성 → 기기 간 동기화 시 같은 항목이 하나로 수렴
+    const q = (cat, label, value, note) => db.quickref.push({ id: `q-${B}-${cat}-${label}`, bld: B, cat, label, value, note: note || '' });
+    // 비번 등 민감 정보는 공개 코드에 시드하지 않음 — 공유 서버(비공개)에서 내려옴
     q('매일 체크', '전자레인지', '', '16–20층 린넨실·복도 매일 청소·점검');
     q('매일 체크', '생수 수량', '', '퇴근 전 16–20층 확인 후 보고');
     q('매일 체크', '밥솥 회수', '', '세척 확인 후 밀봉 보관');
@@ -71,8 +72,7 @@ const Store = (() => {
   }
   function seedQuickC(db) {
     const C = 'C';
-    const q = (cat, label, value, note) => db.quickref.push({ id: uid('q'), bld: C, cat, label, value, note: note || '' });
-    q('비밀번호', '습득물 · 기타', '', '민감 정보 — 공유 서버 연결 시 표시됩니다');
+    const q = (cat, label, value, note) => db.quickref.push({ id: `q-${C}-${cat}-${label}`, bld: C, cat, label, value, note: note || '' });
     q('핵심 메모', '컴퓨터 있는 층', '3F · 11F');
     q('핵심 메모', '추가침구(추침)', '3F 창고', '제작·보관');
     q('핵심 메모', '에어컨 사용 시', '', '책상 밑 물통 꼭 확인');
@@ -229,8 +229,8 @@ const Store = (() => {
     let cfg = null;
     try { cfg = JSON.parse(localStorage.getItem(LS_CFG)); } catch { cfg = null; }
     let status = cfg ? 'idle' : 'local';
-    let lastSha = null, timer = null, listeners = [], onRemoteChange = null;
-    const setStatus = (s, d) => { status = s; listeners.forEach((f) => f(s, d)); };
+    let lastSha = null, timer = null, listeners = [], onRemoteChange = null, lastError = null;
+    const setStatus = (s, d) => { status = s; if (s === 'error') lastError = d; if (s === 'synced') lastError = null; listeners.forEach((f) => f(s, d)); };
     const api = (path, init) => fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}` + (init && init.method ? '' : `?ref=${cfg.branch || 'main'}&t=${Date.now()}`), {
       ...init, headers: { 'Authorization': 'Bearer ' + cfg.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(init && init.headers) },
     });
@@ -287,7 +287,7 @@ const Store = (() => {
     }
     function schedule(ms) { clearTimeout(timer); timer = setTimeout(pullPush, ms || 2500); }
     return {
-      get cfg() { return cfg; }, get status() { return status; },
+      get cfg() { return cfg; }, get status() { return status; }, get lastError() { return lastError; },
       configure(c) { cfg = c; if (c) localStorage.setItem(LS_CFG, JSON.stringify(c)); else { localStorage.removeItem(LS_CFG); setStatus('local'); } if (c) schedule(10); },
       schedule, pullPush,
       onStatus(f) { listeners.push(f); }, onChange(f) { onRemoteChange = f; },

@@ -475,8 +475,10 @@ function toggleTheme() { const r = document.documentElement; r.dataset.theme = r
 $('#gearBtn').onclick = () => {
   const connected = !!Store.Sync.cfg;
   sheet(`<h3>설정</h3>
-    <div class="qrow" style="padding:0 0 10px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${connected ? '연결됨' : '로컬 모드'}</span></div>
-    <button class="btn filled" data-team style="width:100%;margin-bottom:8px">팀 암호로 연결</button>
+    <div class="qrow" style="padding:0 0 4px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${connected ? { synced: '연결됨 ✓', syncing: '동기화 중…', error: '오류', idle: '연결됨' }[Store.Sync.status] || '연결됨' : '로컬 모드'}</span></div>
+    ${connected && Store.Sync.status === 'error' ? `<div class="meta" style="color:var(--danger);margin-bottom:8px">${esc(Store.Sync.lastError || '동기화 실패 — 토큰/저장소 확인')}</div>` : ''}
+    <button class="btn filled" data-team style="width:100%;margin-bottom:6px">팀 암호로 연결</button>
+    <button class="btn" data-tok style="width:100%;margin-bottom:8px">GitHub 토큰으로 바로 연결</button>
     <div class="qrow" style="padding:8px 0 6px"><span class="ql">AI 도우미</span><span class="qcode" style="background:${AI.enabled() ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${AI.enabled() ? 'var(--ok)' : 'var(--dim)'}">${esc(AI.providerName())}</span></div>
     <button class="btn" data-ai style="width:100%;margin-bottom:8px">AI 연결 설정</button>
     <details style="margin:8px 0"><summary class="meta" style="cursor:pointer;padding:6px 0">데이터 초기화</summary>
@@ -490,6 +492,7 @@ $('#gearBtn').onclick = () => {
     <hr style="border:none;border-top:1px solid var(--surface-2);margin:12px 0">
     <div class="meta">버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트 확인</button> · <button style="color:var(--accent)" data-th>다크/라이트</button></div>`);
   $('#sheetBody [data-team]').onclick = async () => { const cfg = await Store.Team.fetch(); if (!cfg) return alert('아직 팀 연결이 설정되지 않았습니다. 관리자가 seal.html로 team.json을 등록해야 합니다.'); unlockSheet(cfg); };
+  $('#sheetBody [data-tok]').onclick = tokenConnectSheet;
   $('#sheetBody [data-ai]').onclick = aiSheet;
   $('#sheetBody [data-clear]').onclick = () => reqEdit(() => { if (confirm(`${bldName()} 포함 모든 동의 재고·장비·습득물·하자·톡·로그를 비웁니다. 계속할까요?`)) { Store.clearOperational(); closeSheet(); refreshAll(); $('#msgs').innerHTML = ''; briefingCard(); } });
   $('#sheetBody [data-reseed]').onclick = () => reqEdit(() => { if (confirm('예시 데이터로 되돌립니다(현재 데이터 삭제). 계속할까요?')) { Store.resetSeed(); location.reload(); } });
@@ -498,20 +501,47 @@ $('#gearBtn').onclick = () => {
   $('#sheetBody [data-upd]').onclick = checkUpdate;
   $('#sheetBody [data-th]').onclick = toggleTheme;
 };
+function tokenConnectSheet() {
+  const c = Store.Sync.cfg || {};
+  sheet(`<h3>GitHub 토큰으로 연결</h3>
+    <p class="meta">관리자가 비공개 데이터 저장소용 <b>fine-grained 토큰</b>을 발급해 붙여넣으면 모든 기기가 같은 데이터를 봅니다. 발급 방법은 아래 링크 참고.</p>
+    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;display:inline-block;margin-bottom:8px">→ GitHub 토큰 발급 페이지 열기</a>
+    <div class="meta" style="margin-bottom:8px">발급 시: Repository access = <b>houseman-os-data</b> 하나만 · Permissions = <b>Contents: Read and write</b></div>
+    <label>데이터 저장소</label><input type="text" id="tcRepo" value="${esc(c.repo || 'jykim5215/houseman-os-data')}">
+    <label>토큰 (github_pat_…)</label><input type="password" id="tcTok" placeholder="붙여넣기" autocomplete="off" value="${esc(c.token || '')}">
+    <div id="tcerr" class="meta" style="min-height:16px;margin-top:6px"></div>
+    <div class="foot"><button class="btn" data-c>취소</button><button class="btn" data-test>테스트</button><button class="btn filled" data-ok>연결</button></div>`);
+  const read = () => ({ repo: $('#tcRepo').value.trim(), token: $('#tcTok').value.trim(), branch: 'main', path: 'data/db.json' });
+  $('#sheetBody [data-c]').onclick = closeSheet;
+  $('#sheetBody [data-test]').onclick = async (ev) => {
+    ev.target.textContent = '확인 중…';
+    try { const ok = await Store.Sync.test(read()); $('#tcerr').style.color = ok ? 'var(--ok)' : 'var(--danger)'; $('#tcerr').textContent = ok ? '✓ 연결 확인' : '✗ 실패 — 저장소/토큰 확인'; }
+    catch (e) { $('#tcerr').style.color = 'var(--danger)'; $('#tcerr').textContent = e.message; }
+    ev.target.textContent = '테스트';
+  };
+  $('#sheetBody [data-ok]').onclick = () => { const v = read(); if (!v.repo || !v.token) return alert('저장소와 토큰을 입력하세요'); Store.Sync.configure(v); closeSheet(); refreshHead(); setTimeout(() => Store.Sync.pullPush().then(() => refreshAll()), 200); };
+}
+
 function aiSheet() {
-  const c = AI.cfg || { provider: 'anthropic', model: 'claude-opus-4-8', key: '' };
+  const c = AI.cfg || { provider: 'gemini', model: 'gemini-2.5-flash', key: '' };
   const opts = (p) => AI.MODELS[p].map((m) => `<option value="${m}" ${m === c.model ? 'selected' : ''}>${m}</option>`).join('');
   sheet(`<h3>AI 연결</h3>
     <p class="meta">키는 <b>이 기기에만</b> 저장되고 선택한 제공사로만 전송됩니다. 연결하면 정해진 문장이 아니어도 자유롭게 묻고 지시할 수 있습니다.</p>
     <label>제공사</label><select id="aip">
+      <option value="gemini" ${c.provider === 'gemini' ? 'selected' : ''}>Gemini (Google · 무료 키)</option>
       <option value="anthropic" ${c.provider === 'anthropic' ? 'selected' : ''}>Claude (Anthropic)</option>
-      <option value="gemini" ${c.provider === 'gemini' ? 'selected' : ''}>Gemini (Google)</option>
       <option value="openai" ${c.provider === 'openai' ? 'selected' : ''}>OpenAI</option></select>
     <label>모델</label><select id="aim">${opts(c.provider)}</select>
-    <label>API 키</label><input type="password" id="aik" placeholder="직접 붙여넣기" value="${esc(c.key || '')}" autocomplete="off">
+    <label>API 키</label><input type="password" id="aik" placeholder="붙여넣기" value="${esc(c.key || '')}" autocomplete="off">
+    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;display:inline-block;margin-top:6px" id="aikeylink">→ 무료 Gemini 키 발급 (Google AI Studio)</a>
     <div id="aierr" class="meta" style="min-height:16px;margin-top:6px"></div>
     <div class="foot"><button class="btn" data-off>사용 안 함</button><button class="btn" data-test>연결 테스트</button><button class="btn filled" data-ok>저장</button></div>`);
-  $('#aip').onchange = () => { $('#aim').innerHTML = AI.MODELS[$('#aip').value].map((m) => `<option value="${m}">${m}</option>`).join(''); };
+  $('#aip').onchange = () => {
+    const p = $('#aip').value;
+    $('#aim').innerHTML = AI.MODELS[p].map((m) => `<option value="${m}">${m}</option>`).join('');
+    const links = { gemini: ['https://aistudio.google.com/apikey', '→ 무료 Gemini 키 발급 (Google AI Studio)'], anthropic: ['https://console.anthropic.com/settings/keys', '→ Claude API 키 발급'], openai: ['https://platform.openai.com/api-keys', '→ OpenAI API 키 발급'] }[p];
+    const a = $('#aikeylink'); if (a) { a.href = links[0]; a.textContent = links[1]; }
+  };
   const read = () => ({ provider: $('#aip').value, model: $('#aim').value, key: $('#aik').value.trim() });
   $('#sheetBody [data-off]').onclick = () => { AI.configure(null); closeSheet(); };
   $('#sheetBody [data-test]').onclick = async (ev) => {
