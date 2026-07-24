@@ -192,15 +192,18 @@ const Store = (() => {
   /* ── 계정 로그인 (이름 + 비밀번호 + 역할) ── */
   const enc = new TextEncoder();
   const hex = (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-  async function derive(pw, salt) {
+  const ITER = 310000; // OWASP 권장에 근접(PBKDF2-SHA256)
+  async function derive(pw, salt, iter) {
     const km = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
-    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(salt), iterations: 150000, hash: 'SHA-256' }, km, 256);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(salt), iterations: iter || ITER, hash: 'SHA-256' }, km, 256);
     return hex(bits);
   }
   const Auth = {
     users() { return load().users || []; },
     hasUsers() { return this.users().length > 0; },
-    get current() { try { return JSON.parse(sessionStorage.getItem('hos.session') || 'null'); } catch { return null; } },
+    hasAdmin() { return this.users().some((u) => u.role === 'admin'); },
+    // 로그인 유지: localStorage (개인 기기 전제, 매번 재로그인 안 함)
+    get current() { try { const c = JSON.parse(localStorage.getItem('hos.session') || 'null'); if (!c) return null; const u = this.users().find((x) => x.id === c.id); return u ? { id: u.id, name: u.name, role: u.role } : c; } catch { return null; } },
     isAdmin() { const c = this.current; return !!c && c.role === 'admin'; },
     async create(name, pw, role) {
       name = String(name || '').trim();
@@ -209,7 +212,7 @@ const Store = (() => {
       if (!db.users) db.users = [];
       if (this.users().some((u) => u.name === name)) throw new Error('이미 있는 이름입니다');
       const salt = uid('s');
-      const u = { id: uid('u'), name, role: role || 'staff', salt, hash: await derive(pw, salt), createdAt: now() };
+      const u = { id: uid('u'), name, role: role || 'staff', salt, iter: ITER, hash: await derive(pw, salt, ITER), createdAt: now() };
       db.users.push(u);
       if (!db.workers) db.workers = [];
       if (!db.workers.includes(name)) db.workers.push(name);
@@ -219,12 +222,19 @@ const Store = (() => {
     async login(name, pw) {
       const u = this.users().find((x) => x.name === String(name || '').trim());
       if (!u) throw new Error('없는 계정입니다');
-      if ((await derive(pw, u.salt)) !== u.hash) throw new Error('비밀번호가 올바르지 않습니다');
-      sessionStorage.setItem('hos.session', JSON.stringify({ id: u.id, name: u.name, role: u.role }));
+      if ((await derive(pw, u.salt, u.iter || 150000)) !== u.hash) throw new Error('비밀번호가 올바르지 않습니다');
+      // 구버전 반복 수 자동 상향(로그인 성공 시 재해시)
+      if ((u.iter || 150000) < ITER) { u.iter = ITER; u.hash = await derive(pw, u.salt, ITER); persist(); Sync.schedule(); }
+      localStorage.setItem('hos.session', JSON.stringify({ id: u.id, name: u.name, role: u.role }));
       localStorage.setItem(LS_WORKER, u.name);
       return u;
     },
-    logout() { sessionStorage.removeItem('hos.session'); },
+    async setPassword(id, pw) {
+      const u = this.users().find((x) => x.id === id); if (!u) throw new Error('계정 없음');
+      if (String(pw || '').length < 4) throw new Error('비밀번호는 4자 이상');
+      u.salt = uid('s'); u.iter = ITER; u.hash = await derive(pw, u.salt, ITER); persist(); Sync.schedule();
+    },
+    logout() { localStorage.removeItem('hos.session'); },
     setRole(id, role) { const u = this.users().find((x) => x.id === id); if (u) { u.role = role; persist(); Sync.schedule(); } },
     remove(id) { db.users = this.users().filter((u) => u.id !== id); persist(); Sync.schedule(); },
   };
@@ -310,8 +320,19 @@ const Store = (() => {
   })();
 
   const b64ToBuf = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const bufToB64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b)));
   const Team = {
     async fetch() { try { const r = await fetch('team.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return null; const j = await r.json(); return (j && j.ct) ? j : null; } catch { return null; } },
+    // 관리자용: 토큰을 팀 코드로 암호화해 team.json 내용을 만든다 (평문 토큰은 저장 안 됨)
+    async seal(token, repo, passphrase) {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const iter = 200000;
+      const km = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+      const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+      const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(token));
+      return { v: 1, repo, branch: 'main', path: 'data/db.json', iter, salt: bufToB64(salt), iv: bufToB64(iv), ct: bufToB64(ct) };
+    },
     async unlock(passphrase, c) {
       const km = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
       const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64ToBuf(c.salt), iterations: c.iter || 200000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);

@@ -1,6 +1,6 @@
 /* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.6.2';
+const APP_VERSION = '0.7.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -444,6 +444,8 @@ function showLogin() {
         await Store.Auth.create($('#nu').value, $('#np').value, 'admin');
         await Store.Auth.login($('#nu').value.trim(), $('#np').value);
         closeSheet(); afterLogin();
+        // 최초 관리자 → 팀 서버가 아직 없으면 바로 설정으로 유도
+        if (!Store.Sync.cfg) { const cfg = await Store.Team.fetch(); if (!cfg) sealSheet(); }
       } catch (e) { $('#lerr').textContent = e.message; }
     };
     return;
@@ -502,53 +504,77 @@ $('#workerChip').onclick = () => {
 /* ── 설정 ── */
 function toggleTheme() { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? '' : 'dark'; localStorage.setItem('hos.theme', r.dataset.theme); document.querySelector('meta[name=theme-color]').content = r.dataset.theme === 'dark' ? '#1b1714' : '#faf7f2'; }
 $('#gearBtn').onclick = () => {
-  const connected = !!Store.Sync.cfg;
+  const connected = !!Store.Sync.cfg, admin = isAdmin(), st = Store.Sync.status;
+  const stLabel = connected ? ({ synced: '연결됨 ✓', syncing: '동기화 중…', error: '오류', idle: '연결됨' }[st] || '연결됨') : '미연결';
   sheet(`<h3>설정</h3>
-    <div class="qrow" style="padding:0 0 4px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${connected ? { synced: '연결됨 ✓', syncing: '동기화 중…', error: '오류', idle: '연결됨' }[Store.Sync.status] || '연결됨' : '로컬 모드'}</span></div>
-    ${connected && Store.Sync.status === 'error' ? `<div class="meta" style="color:var(--danger);margin-bottom:8px">${esc(Store.Sync.lastError || '동기화 실패 — 토큰/저장소 확인')}</div>` : ''}
-    <button class="btn filled" data-team style="width:100%;margin-bottom:6px">팀 암호로 연결</button>
-    <button class="btn" data-tok style="width:100%;margin-bottom:8px">GitHub 토큰으로 바로 연결</button>
-    <div class="qrow" style="padding:8px 0 6px"><span class="ql">AI 도우미</span><span class="qcode" style="background:${AI.enabled() ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${AI.enabled() ? 'var(--ok)' : 'var(--dim)'}">${esc(AI.providerName())}</span></div>
-    <button class="btn" data-ai style="width:100%;margin-bottom:8px">AI 연결 설정</button>
-    <details style="margin:8px 0"><summary class="meta" style="cursor:pointer;padding:6px 0">데이터 초기화</summary>
-      <button class="btn" data-clear style="width:100%;margin:6px 0">예시 데이터 비우기 (빈 상태로 시작)</button>
-      <button class="btn danger" data-reseed style="width:100%">예시 데이터로 되돌리기</button>
-      <p class="meta" style="margin-top:6px">공유 서버 연결 시 이 변경도 동기화됩니다. 실제 데이터를 채우기 전에 "비우기"를 권장합니다.</p></details>
-    <details style="margin-bottom:8px"><summary class="meta" style="cursor:pointer;padding:6px 0">고급 — 저장소·토큰 직접 입력</summary>
-      <label>데이터 저장소</label><input type="text" id="cfgRepo" placeholder="owner/repo" value="${esc((Store.Sync.cfg && Store.Sync.cfg.repo) || '')}">
-      <label>토큰</label><input type="password" id="cfgTok" placeholder="github_pat_…" value="${esc((Store.Sync.cfg && Store.Sync.cfg.token) || '')}">
-      <div class="foot"><button class="btn" data-off>로컬 모드</button><button class="btn filled" data-save>저장</button></div></details>
+    <div class="qrow" style="padding:0 0 6px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${stLabel}</span></div>
+    ${connected && st === 'error' ? `<div class="meta" style="color:var(--danger);margin-bottom:8px">${esc(Store.Sync.lastError || '동기화 실패')}</div>` : ''}
+    ${connected ? '' : `<button class="btn filled" data-conn style="width:100%;margin-bottom:8px">팀 코드로 연결</button>`}
+    ${admin ? `<details style="margin:6px 0" open><summary style="cursor:pointer;font-weight:700;padding:6px 0;font-size:13.5px">관리자 설정</summary>
+      <button class="btn" data-seal style="width:100%;margin:6px 0">팀 서버 만들기 / 토큰 재봉인</button>
+      <div class="qrow" style="padding:8px 0 2px"><span class="ql">AI 도우미</span><span class="qcode" style="background:${AI.enabled() ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${AI.enabled() ? 'var(--ok)' : 'var(--dim)'}">${esc(AI.providerName())}${Store.getSharedAI() ? ' · 팀공유' : ''}</span></div>
+      <button class="btn" data-ai style="width:100%;margin:4px 0 8px">AI 키 설정 (팀 공유)</button>
+      <button class="btn" data-clear style="width:100%;margin:4px 0">예시 데이터 비우기</button>
+      <button class="btn danger" data-reseed style="width:100%;margin-top:6px">예시로 되돌리기</button>
+      </details>` : `<p class="meta" style="margin:2px 0 8px">토큰·AI 키는 관리자가 한 번만 설정하면 이 기기에도 자동 적용됩니다. 따로 입력할 필요 없습니다.</p>`}
     <hr style="border:none;border-top:1px solid var(--surface-2);margin:12px 0">
-    <div class="meta">버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트 확인</button> · <button style="color:var(--accent)" data-th>다크/라이트</button></div>`);
-  $('#sheetBody [data-team]').onclick = async () => { const cfg = await Store.Team.fetch(); if (!cfg) return alert('아직 팀 연결이 설정되지 않았습니다. 관리자가 seal.html로 team.json을 등록해야 합니다.'); unlockSheet(cfg); };
-  $('#sheetBody [data-tok]').onclick = tokenConnectSheet;
-  $('#sheetBody [data-ai]').onclick = aiSheet;
-  $('#sheetBody [data-clear]').onclick = () => reqEdit(() => { if (confirm(`${bldName()} 포함 모든 동의 재고·장비·습득물·하자·톡·로그를 비웁니다. 계속할까요?`)) { Store.clearOperational(); closeSheet(); refreshAll(); $('#msgs').innerHTML = ''; briefingCard(); } });
-  $('#sheetBody [data-reseed]').onclick = () => reqEdit(() => { if (confirm('예시 데이터로 되돌립니다(현재 데이터 삭제). 계속할까요?')) { Store.resetSeed(); location.reload(); } });
-  $('#sheetBody [data-save]').onclick = () => { const repo = $('#cfgRepo').value.trim(), token = $('#cfgTok').value.trim(); if (!repo || !token) return alert('저장소와 토큰을 입력하세요'); Store.Sync.configure({ repo, token, branch: 'main', path: 'data/db.json' }); closeSheet(); refreshHead(); };
-  $('#sheetBody [data-off]').onclick = () => { Store.Sync.configure(null); closeSheet(); refreshHead(); };
+    <div class="meta">${esc((me() || {}).name || '')}${admin ? ' · 관리자' : ''} · 버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트</button> · <button style="color:var(--accent)" data-th>다크/라이트</button> · <button style="color:var(--danger)" data-out>로그아웃</button></div>`);
+  $('#sheetBody [data-conn]') && ($('#sheetBody [data-conn]').onclick = connectFlow);
+  $('#sheetBody [data-seal]') && ($('#sheetBody [data-seal]').onclick = sealSheet);
+  $('#sheetBody [data-ai]') && ($('#sheetBody [data-ai]').onclick = aiSheet);
+  $('#sheetBody [data-clear]') && ($('#sheetBody [data-clear]').onclick = () => reqEdit(() => { if (confirm('모든 동의 재고·장비·습득물·하자·톡·로그를 비웁니다. 계속할까요?')) { Store.clearOperational(); closeSheet(); refreshAll(); $('#msgs').innerHTML = ''; briefingCard(); } }));
+  $('#sheetBody [data-reseed]') && ($('#sheetBody [data-reseed]').onclick = () => reqEdit(() => { if (confirm('예시 데이터로 되돌립니다(현재 기기 데이터 삭제). 계속할까요?')) { Store.resetSeed(); location.reload(); } }));
   $('#sheetBody [data-upd]').onclick = checkUpdate;
   $('#sheetBody [data-th]').onclick = toggleTheme;
+  $('#sheetBody [data-out]').onclick = () => { Store.Auth.logout(); closeSheet(); showLogin(); };
 };
-function tokenConnectSheet() {
-  const c = Store.Sync.cfg || {};
-  sheet(`<h3>GitHub 토큰으로 연결</h3>
-    <p class="meta">관리자가 비공개 데이터 저장소용 <b>fine-grained 토큰</b>을 발급해 붙여넣으면 모든 기기가 같은 데이터를 봅니다. 발급 방법은 아래 링크 참고.</p>
-    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;display:inline-block;margin-bottom:8px">→ GitHub 토큰 발급 페이지 열기</a>
-    <div class="meta" style="margin-bottom:8px">발급 시: Repository access = <b>houseman-os-data</b> 하나만 · Permissions = <b>Contents: Read and write</b></div>
-    <label>데이터 저장소</label><input type="text" id="tcRepo" value="${esc(c.repo || 'jykim5215/houseman-os-data')}">
-    <label>토큰 (github_pat_…)</label><input type="password" id="tcTok" placeholder="붙여넣기" autocomplete="off" value="${esc(c.token || '')}">
-    <div id="tcerr" class="meta" style="min-height:16px;margin-top:6px"></div>
-    <div class="foot"><button class="btn" data-c>취소</button><button class="btn" data-test>테스트</button><button class="btn filled" data-ok>연결</button></div>`);
-  const read = () => ({ repo: $('#tcRepo').value.trim(), token: $('#tcTok').value.trim(), branch: 'main', path: 'data/db.json' });
+
+async function connectFlow() {
+  const cfg = await Store.Team.fetch();
+  if (cfg) return teamGate(cfg);
+  if (isAdmin()) { if (confirm('아직 팀 서버가 설정되지 않았습니다. 지금 만들까요?')) sealSheet(); return; }
+  alert('관리자가 아직 팀 서버를 설정하지 않았습니다. 관리자에게 문의하세요.');
+}
+
+/* 관리자: 토큰을 팀 코드로 봉인 → 이 기기 즉시 연결 + team.json 내용 생성 */
+function sealSheet() {
+  sheet(`<h3>팀 서버 설정</h3>
+    <p class="meta">GitHub 토큰과 <b>팀 코드</b>를 정하면 모든 기기가 <b>팀 코드 하나</b>로 연결됩니다. 토큰은 팀 코드로 암호화되어 공개 코드엔 평문으로 남지 않습니다.</p>
+    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;display:inline-block;margin-bottom:6px">→ 토큰 발급 (Repository=houseman-os-data · Contents: Read and write)</a>
+    <label>데이터 저장소</label><input type="text" id="szRepo" value="${esc((Store.Sync.cfg && Store.Sync.cfg.repo) || 'jykim5215/houseman-os-data')}">
+    <label>GitHub 토큰 (github_pat_…)</label><input type="password" id="szTok" placeholder="붙여넣기" autocomplete="off">
+    <label>팀 코드 (근무자에게 알려줄 암호 · 길게)</label><input type="text" id="szCode" placeholder="예: vivaldi-oak-2026">
+    <div id="szerr" class="meta" style="min-height:16px;margin-top:6px"></div>
+    <div class="foot"><button class="btn" data-c>취소</button><button class="btn" data-test>토큰 확인</button><button class="btn filled" data-ok>봉인하고 연결</button></div>`);
+  const read = () => ({ repo: $('#szRepo').value.trim(), token: $('#szTok').value.trim(), code: $('#szCode').value.trim() });
   $('#sheetBody [data-c]').onclick = closeSheet;
   $('#sheetBody [data-test]').onclick = async (ev) => {
+    const v = read(); if (!v.repo || !v.token) return alert('저장소와 토큰을 입력하세요');
     ev.target.textContent = '확인 중…';
-    try { const ok = await Store.Sync.test(read()); $('#tcerr').style.color = ok ? 'var(--ok)' : 'var(--danger)'; $('#tcerr').textContent = ok ? '✓ 연결 확인' : '✗ 실패 — 저장소/토큰 확인'; }
-    catch (e) { $('#tcerr').style.color = 'var(--danger)'; $('#tcerr').textContent = e.message; }
-    ev.target.textContent = '테스트';
+    try { const ok = await Store.Sync.test({ repo: v.repo, token: v.token, branch: 'main', path: 'data/db.json' }); $('#szerr').style.color = ok ? 'var(--ok)' : 'var(--danger)'; $('#szerr').textContent = ok ? '✓ 토큰 정상' : '✗ 실패 — 토큰/저장소 확인'; }
+    catch (e) { $('#szerr').style.color = 'var(--danger)'; $('#szerr').textContent = e.message; }
+    ev.target.textContent = '토큰 확인';
   };
-  $('#sheetBody [data-ok]').onclick = () => { const v = read(); if (!v.repo || !v.token) return alert('저장소와 토큰을 입력하세요'); Store.Sync.configure(v); closeSheet(); refreshHead(); setTimeout(() => Store.Sync.pullPush().then(() => refreshAll()), 200); };
+  $('#sheetBody [data-ok]').onclick = async () => {
+    const v = read();
+    if (!v.repo || !v.token) return alert('저장소와 토큰을 입력하세요');
+    if (v.code.length < 6) return alert('팀 코드는 6자 이상으로 정해주세요');
+    $('#szerr').style.color = 'var(--dim)'; $('#szerr').textContent = '봉인 중…';
+    try {
+      // 1) 이 기기 즉시 연결
+      Store.Sync.configure({ repo: v.repo, token: v.token, branch: 'main', path: 'data/db.json' });
+      await Store.Sync.pullPush();
+      // 2) team.json 내용 생성(암호문)
+      const blob = await Store.Team.seal(v.token, v.repo, v.code);
+      const json = JSON.stringify(blob, null, 2);
+      sheet(`<h3>✅ 이 기기 연결 완료</h3>
+        <p class="meta">다른 기기는 아래 <b>team.json</b>을 등록해야 팀 코드로 연결됩니다. 이 내용을 복사해 Claude에게 주거나 저장소의 <code>docs/team.json</code>에 커밋하세요. (암호문이라 안전합니다)</p>
+        <textarea id="szout" readonly style="height:150px;font-family:monospace;font-size:11px">${esc(json)}</textarea>
+        <div class="foot"><button class="btn" data-copy>복사</button><button class="btn filled" data-done>완료</button></div>`);
+      $('#sheetBody [data-copy]').onclick = () => { const t = $('#szout'); t.select(); try { navigator.clipboard.writeText(json); } catch { document.execCommand('copy'); } $('#sheetBody [data-copy]').textContent = '복사됨 ✓'; };
+      $('#sheetBody [data-done]').onclick = () => { closeSheet(); refreshAll(); };
+    } catch (e) { $('#szerr').style.color = 'var(--danger)'; $('#szerr').textContent = e.message; }
+  };
 }
 
 function aiSheet() {
@@ -563,8 +589,8 @@ function aiSheet() {
     <label>모델</label><select id="aim">${opts(c.provider)}</select>
     <label>API 키</label><input type="password" id="aik" placeholder="붙여넣기" value="${esc(c.key || '')}" autocomplete="off">
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;display:inline-block;margin-top:6px" id="aikeylink">→ 무료 Gemini 키 발급 (Google AI Studio)</a>
-    ${isAdmin() ? `<div class="checkrow"><input type="checkbox" id="aishare" ${Store.getSharedAI() ? 'checked' : ''}><label for="aishare" style="margin:0;font-size:13px;color:var(--text)">팀 전체에 공유 (모든 기기가 이 키로 자동 사용)</label></div>
-    <p class="meta" style="margin-top:4px">공유 시 키는 비공개 데이터 저장소에만 저장됩니다. 공용 무료 키 사용을 권장합니다.</p>` : ''}
+    ${isAdmin() ? `<div class="checkrow"><input type="checkbox" id="aishare" ${(Store.getSharedAI() || !AI.enabled()) ? 'checked' : ''}><label for="aishare" style="margin:0;font-size:13px;color:var(--text)">팀 전체에 공유 (모든 기기가 이 키로 자동 사용 — 권장)</label></div>
+    <p class="meta" style="margin-top:4px">공유하면 다른 근무자는 키를 넣을 필요가 없습니다. 키는 비공개 데이터 저장소에만 저장됩니다.</p>` : ''}
     <div id="aierr" class="meta" style="min-height:16px;margin-top:6px"></div>
     <div class="foot"><button class="btn" data-off>사용 안 함</button><button class="btn" data-test>연결 테스트</button><button class="btn filled" data-ok>저장</button></div>`);
   $('#aip').onchange = () => {
@@ -588,13 +614,22 @@ function aiSheet() {
     closeSheet();
   };
 }
-function unlockSheet(cfg) {
-  sheet(`<h3>공유 서버 연결</h3><p class="meta">팀 암호를 입력하면 모든 근무자가 같은 데이터를 봅니다. 이 기기에서는 처음 한 번만.</p>
-    <label>팀 암호</label><input type="password" id="tpass" autocomplete="off" placeholder="관리자에게 받은 팀 암호">
-    <div id="tperr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
-    <div class="foot"><button class="btn" data-skip>로컬로</button><button class="btn filled" data-ok>연결</button></div>`);
-  const go = async () => { const p = $('#tpass').value.trim(); if (!p) return; $('#tperr').textContent = '연결 중…'; try { await Store.Team.unlock(p, cfg); closeSheet(); refreshAll(); } catch { $('#tperr').textContent = '암호가 올바르지 않습니다.'; } };
-  $('#sheetBody [data-ok]').onclick = go; $('#tpass').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); }); $('#sheetBody [data-skip]').onclick = closeSheet;
+/* 팀 코드 입력 → 토큰 복호화 → 연결 → 계정/키 동기화 → 로그인 */
+function teamGate(cfg) {
+  const loggedIn = !!me();
+  sheet(`<h3>팀 연결</h3><p class="meta">팀 코드를 입력하면 우리 팀 데이터에 연결됩니다. 이 기기에서는 <b>처음 한 번만</b> 입력하면 됩니다.</p>
+    <label>팀 코드</label><input type="password" id="tg" autocomplete="off" placeholder="관리자에게 받은 팀 코드">
+    <div id="tge" class="meta" style="min-height:16px;margin-top:6px"></div>
+    <div class="foot"><button class="btn" data-skip>나중에</button><button class="btn filled" data-ok>연결</button></div>`);
+  const go = async () => {
+    const p = $('#tg').value.trim(); if (!p) return;
+    $('#tge').style.color = 'var(--dim)'; $('#tge').textContent = '연결 중…';
+    try { await Store.Team.unlock(p, cfg); await Store.Sync.pullPush(); closeSheet(); if (loggedIn) { afterLogin(); } else { showLogin(); } }
+    catch { $('#tge').style.color = 'var(--danger)'; $('#tge').textContent = '팀 코드가 올바르지 않습니다.'; }
+  };
+  $('#sheetBody [data-ok]').onclick = go;
+  $('#tg').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  $('#sheetBody [data-skip]').onclick = () => { closeSheet(); if (!loggedIn) showLogin(); };
 }
 $('#syncBtn').onclick = () => { if (Store.Sync.cfg) Store.Sync.pullPush(); else $('#gearBtn').click(); };
 
@@ -617,14 +652,23 @@ async function checkUpdate() { try { const r = await fetch('version.json?t=' + D
 setInterval(async () => { try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); const j = await r.json(); if (j.version && j.version !== APP_VERSION) $('#updBar').classList.remove('hide'); } catch {} }, 5 * 60 * 1000);
 $('#updGo').onclick = async () => { if ('serviceWorker' in navigator) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } location.reload(); };
 
-/* ── 시작 ── */
-(function init() {
+/* ── 시작: 연결(팀 코드) → 로그인 → 앱 ── */
+(function boot() {
   const th = localStorage.getItem('hos.theme'); if (th) { document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]').content = th === 'dark' ? '#1b1714' : '#faf7f2'; }
   Store.load(); renderBld();
   setMode('ask'); renderCounters(); renderQuick(); refreshHead();
   Store.Sync.onStatus(() => refreshHead()); Store.Sync.onChange(() => refreshAll()); Store.Sync.start();
   const u = me();
-  if (u) { $('#workerChip').textContent = u.name + (u.role === 'admin' ? ' ·관리' : ''); briefingCard(); }
-  else { $('#workerChip').textContent = '로그인'; showLogin(); }
-  (async () => { if (!Store.Sync.cfg) { const cfg = await Store.Team.fetch(); if (cfg && !me()) return; if (cfg) unlockSheet(cfg); } })();
+  if (Store.Sync.cfg) { // 이미 연결됨
+    if (u) { $('#workerChip').textContent = u.name + (u.role === 'admin' ? ' ·관리' : ''); briefingCard(); }
+    else { $('#workerChip').textContent = '로그인'; showLogin(); }
+    return;
+  }
+  // 미연결: team.json 있으면 팀 코드로 연결, 없으면 로그인(로컬/최초 관리자)
+  $('#workerChip').textContent = u ? u.name + (u.role === 'admin' ? ' ·관리' : '') : '로그인';
+  Store.Team.fetch().then((cfg) => {
+    if (cfg && !u) return teamGate(cfg);      // 첫 실행: 팀 코드 → 로그인
+    if (u) { briefingCard(); if (cfg) teamGate(cfg); }  // 로그인돼 있는데 미연결 → 팀 코드 권유
+    else showLogin();
+  });
 })();
