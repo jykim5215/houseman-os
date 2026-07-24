@@ -109,6 +109,14 @@ const Logic = (() => {
   function tokens(text) {
     return (text.match(/[가-힣A-Za-z0-9]{2,}/g) || []).map((t) => t.replace(/(은|는|이|가|을|를|의|에|로|까지|부터|이야|인가요|인가|해줘|알려줘|어때|뭐야)$/, '')).filter((t) => t.length >= 2);
   }
+  // 자료에서 질문과 관련된 조각만 추출 (전체 나열 대신 핵심만)
+  function extract(content, toks) {
+    const frags = String(content).split(/\n+|(?<=[.。])\s+|(?<=다\.)\s*/).map((s) => s.trim()).filter((s) => s.length > 1);
+    const scored = frags.map((f) => ({ f, n: toks.reduce((a, t) => a + (f.includes(t) ? 1 : 0), 0) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
+    if (scored.length) return scored.slice(0, 3).map((x) => (x.f.length > 160 ? x.f.slice(0, 160) + '…' : x.f)).join('\n');
+    const first = frags[0] || String(content);
+    return first.length > 160 ? first.slice(0, 160) + '…' : first;
+  }
   function searchSources(text) {
     const toks = tokens(text); if (!toks.length) return [];
     const bld = Store.bld;
@@ -128,10 +136,12 @@ const Logic = (() => {
     const rs = searchSources(text);
     if (!rs.length) return { kind: 'answer', refused: true, internalText: '등록된 자료와 DB에서 근거를 찾지 못했습니다. 데이터 탭에서 관련 문서를 등록하면 답할 수 있습니다.', sources: [] };
     const top = rs[0];
+    const toks = tokens(text);
     const conflict = rs.length > 1 && rs.some((r) => r.priority !== top.priority) ? `우선순위가 다른 출처가 함께 검색됐습니다. 높은 출처("${top.title}")를 채택했습니다.` : null;
     const cust = rs.find((r) => r.custVisible);
-    const clip = (t) => t.length > 220 ? t.slice(0, 220) + '…' : t;
-    return { kind: 'answer', refused: false, customerText: cust ? clip(cust.content) : null, internalText: clip(top.content) + (top.custVisible ? '' : ' (내부 자료)'), conflict,
+    const clip = (t) => t.length > 140 ? t.slice(0, 140) + '…' : t;
+    // 질문 토큰과 관련된 문장/줄만 뽑아 "묻는 것만" 답한다 (전체 나열 방지)
+    return { kind: 'answer', refused: false, customerText: cust ? extract(cust.content, toks) : null, internalText: extract(top.content, toks) + (top.custVisible ? '' : ' _(내부 자료)_'), conflict,
       sources: rs.slice(0, 3).map((r, i) => ({ type: 'doc', n: i + 1, id: r.id, title: r.title, meta: `${['', '① 내부', '② VINFO', '③ 공식홈', '④ 메모'][r.priority] || ''} · ${(r.collectedAt || '').slice(0, 10)}${r.custVisible ? ' · 고객 안내 가능' : ' · 내부'}`, snippet: clip(r.content) })) };
   }
 

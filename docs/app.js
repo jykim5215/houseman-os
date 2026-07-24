@@ -1,6 +1,6 @@
 /* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.6.1';
+const APP_VERSION = '0.6.2';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -24,6 +24,34 @@ $('#sheetbg').onclick = closeSheet;
 /* ── 챗(AI) ── */
 function addMsg(html, cls) { const d = document.createElement('div'); d.className = cls || 'm-ai'; d.innerHTML = html; $('#msgs').appendChild(d); d.scrollIntoView({ behavior: 'smooth', block: 'end' }); return d; }
 const aiMsg = (who, body) => addMsg(`${who ? `<div class="who"><span class="dot"><svg class="ic"><use href="#i-chat"/></svg></span>${who}</div>` : ''}<div class="body">${body}</div>`);
+const thinkingDots = '<span class="thinking" aria-label="생각 중"><i></i><i></i><i></i></span>';
+
+/* 답변을 보기 좋게: 표 | | · 불릿 - · **굵게** · 줄바꿈 렌더 (가벼운 마크다운) */
+function md(s) {
+  const esch = (x) => String(x).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const inline = (x) => esch(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(?<!\*)\*(?!\*)(.+?)\*(?!\*)/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
+  const lines = String(s || '').split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length;) {
+    const ln = lines[i];
+    if (/^\s*\|.*\|\s*$/.test(ln) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      const rows = []; while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(lines[i++]);
+      const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      const head = cells(rows[0]), body = rows.slice(2).map(cells);
+      out.push('<div class="md-tw"><table class="md"><thead><tr>' + head.map((h) => `<th>${inline(h)}</th>`).join('') + '</tr></thead><tbody>' + body.map((r) => '<tr>' + r.map((c) => `<td>${inline(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>');
+      continue;
+    }
+    if (/^\s*[-•]\s+/.test(ln)) {
+      const items = []; while (i < lines.length && /^\s*[-•]\s+/.test(lines[i])) items.push(lines[i++].replace(/^\s*[-•]\s+/, ''));
+      out.push('<ul class="md">' + items.map((t) => `<li>${inline(t)}</li>`).join('') + '</ul>');
+      continue;
+    }
+    if (/^\s*#{1,3}\s+/.test(ln)) { out.push(`<div class="md-h">${inline(ln.replace(/^\s*#{1,3}\s+/, ''))}</div>`); i++; continue; }
+    if (ln.trim() === '') { i++; continue; }
+    out.push(`<div class="md-p">${inline(ln)}</div>`); i++;
+  }
+  return out.join('');
+}
 
 function citeChips(sources) {
   if (!sources || !sources.length) return '';
@@ -109,12 +137,12 @@ async function send(text) {
   const a = Logic.answer(text);
   if (a.kind === 'briefing') return briefingCard();
   if (!a.refused) {
-    return aiMsg('', (a.customerText ? `<div class="dual"><div class="box cust"><span class="t">고객 안내용</span>${esc(a.customerText)}</div><div class="box"><span class="t">내부 참고</span>${esc(a.internalText)}</div></div>` : esc(a.internalText)) + (a.conflict ? `<div class="conflict"><svg class="ic sm"><use href="#i-alert"/></svg><span>${esc(a.conflict)}</span></div>` : '') + citeChips(a.sources));
+    return aiMsg('', (a.customerText ? `<div class="dual"><div class="box cust"><span class="t">고객 안내용</span>${md(a.customerText)}</div><div class="box"><span class="t">내부 참고</span>${md(a.internalText)}</div></div>` : md(a.internalText)) + (a.conflict ? `<div class="conflict"><svg class="ic sm"><use href="#i-alert"/></svg><span>${esc(a.conflict)}</span></div>` : '') + citeChips(a.sources));
   }
 
   // 규칙으로 못 풀면 LLM에게 (설정된 경우)
   if (!AI.enabled()) return aiMsg('', `잘 이해하지 못했어요. ${HELP}<div class="meta" style="margin-top:6px">설정 ⚙에서 AI를 연결하면 자유로운 문장도 이해합니다.</div>`);
-  const thinking = aiMsg('', '<span class="meta">생각 중…</span>');
+  const thinking = aiMsg('', thinkingDots);
   try {
     const r = await AI.ask(text, Logic.snapshot());
     thinking.remove();
@@ -124,7 +152,7 @@ async function send(text) {
     if (r.kind === 'delete' && Array.isArray(r.ids) && r.ids.length) {
       return void needAdmin(() => renderDelete({ entity: r.entity || 'messages', ids: r.ids, summary: r.summary || '삭제', preview: [] }));
     }
-    aiMsg('', esc(r.text || '답을 만들지 못했습니다.') + `<div class="meta" style="margin-top:6px">${esc(AI.providerName())}</div>`);
+    aiMsg('', md(r.text || '답을 만들지 못했습니다.') + `<div class="meta" style="margin-top:6px">${esc(AI.providerName())}</div>`);
   } catch (e) {
     thinking.remove();
     aiMsg('', `AI 호출에 실패했습니다: ${esc(e.message)}<div class="meta" style="margin-top:6px">설정 ⚙에서 키와 제공사를 확인하세요.</div>`);
