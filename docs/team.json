@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "repo": "jykim5215/houseman-os-data",
+  "branch": "main",
+  "path": "data/db.json",
+  "iter": 200000,
+  "salt": "RgdHHXmjfNVwl4rcDbTZLQ==",
+  "iv": "abKq+naAXWlWci/a",
+  "ct": "N5utfHWRHYhdcgEh3DMZUmj6kuukFrybfg3Z8KuZeZyqZ1wGyh4LvKxnkfg7zsW05ob4MQasB7jZDlETArqqWcnF1Ws67i1b3SxAQi3Bqir7QLlgRABFcqiTsv6qDrgRCWxMaMlwu3JYCOwC4A=="
+}

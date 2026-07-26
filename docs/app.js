@@ -1,6 +1,6 @@
 /* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.7.0';
+const APP_VERSION = '0.7.1';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -415,7 +415,8 @@ function renderLog() {
 }
 function dlCsv(name, rows) { const csv = '﻿' + rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = name; a.click(); }
 function renderQuick() {
-  const rows = Store.inBld('quickref');
+  const b = Store.bld;
+  const rows = Store.load().quickref.filter((r) => r.bld === b || r.bld === '*' || (Array.isArray(r.blds) && r.blds.includes(b)));
   if (!rows.length) { $('#quickBody').innerHTML = `<p class="meta">${bldName()}의 현장 카드가 없습니다. 공유 서버를 연결하거나 관리자가 등록하면 표시됩니다.</p>`; return; }
   const groups = new Map(); rows.forEach((r) => { if (!groups.has(r.cat)) groups.set(r.cat, []); groups.get(r.cat).push(r); });
   let i = 0;
