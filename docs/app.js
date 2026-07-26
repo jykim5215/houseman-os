@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.7.4';
+const APP_VERSION = '0.8.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -511,7 +511,8 @@ $('#gearBtn').onclick = () => {
     <div class="qrow" style="padding:0 0 6px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${stLabel}</span></div>
     ${connected && st === 'error' ? `<div class="meta" style="color:var(--danger);margin-bottom:6px">${esc(Store.Sync.lastError || '동기화 실패')}</div>` : ''}
     ${connected ? `<button class="btn" data-diag style="width:100%;margin-bottom:4px">연결 진단</button>
-    <div id="diagOut" class="meta" style="min-height:16px;margin-bottom:8px"></div>` : ''}
+    <div id="diagOut" class="meta" style="min-height:16px;margin-bottom:6px"></div>
+    ${st === 'error' && admin ? `<button class="btn filled" data-fix style="width:100%;margin-bottom:8px">지금 고치기 — 새 토큰으로 재봉인</button>` : ''}` : ''}
     ${connected ? '' : `<button class="btn filled" data-conn style="width:100%;margin-bottom:8px">팀 코드로 연결</button>`}
     ${admin ? `<details style="margin:6px 0" open><summary style="cursor:pointer;font-weight:700;padding:6px 0;font-size:13.5px">관리자 설정</summary>
       <div class="qrow" style="padding:6px 0 2px"><span class="ql">팀 코드 연결</span><span class="qcode" id="tjState" style="background:var(--surface-2);color:var(--dim)">확인 중…</span></div>
@@ -538,6 +539,7 @@ $('#gearBtn').onclick = () => {
     ev.target.textContent = '연결 진단';
   });
   $('#sheetBody [data-seal]') && ($('#sheetBody [data-seal]').onclick = sealSheet);
+  $('#sheetBody [data-fix]') && ($('#sheetBody [data-fix]').onclick = sealSheet);
   if (admin && $('#tjState')) {
     Store.Team.fetch().then((tj) => {
       const s = $('#tjState'), h = $('#tjHint'); if (!s) return;
@@ -564,10 +566,18 @@ async function connectFlow() {
 function sealSheet() {
   sheet(`<h3>팀 서버 설정</h3>
     <p class="meta">GitHub 토큰과 <b>팀 코드</b>를 정하면 모든 기기가 <b>팀 코드 하나</b>로 연결됩니다. 토큰은 팀 코드로 암호화되어 공개 코드엔 평문으로 남지 않습니다.</p>
-    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;display:inline-block;margin-bottom:6px">→ 토큰 발급 (Repository=houseman-os-data · Contents: Read and write)</a>
+    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" class="btn" style="display:block;text-align:center;text-decoration:none;margin:8px 0">→ GitHub 토큰 발급 페이지 열기</a>
+    <div class="meta" style="background:var(--warn-bg);border-radius:var(--r-md);padding:9px 11px;margin-bottom:6px;color:var(--warn)">
+      발급할 때 <b>3가지</b>를 꼭 맞춰주세요. 하나라도 틀리면 연결이 안 됩니다.<br>
+      ① Repository access → <b>Only select repositories</b> → <b>houseman-os-data</b> 선택<br>
+      &nbsp;&nbsp;&nbsp;(기본값 <i>Public repositories</i> 그대로 두면 비공개 저장소를 못 봅니다)<br>
+      ② Permissions → Repository → <b>Contents: Read and write</b><br>
+      ③ Expiration → 길게 (만료되면 다시 발급해야 합니다)
+    </div>
     <label>데이터 저장소</label><input type="text" id="szRepo" value="${esc((Store.Sync.cfg && Store.Sync.cfg.repo) || 'jykim5215/houseman-os-data')}">
     <label>GitHub 토큰 (github_pat_…)</label><input type="password" id="szTok" placeholder="붙여넣기" autocomplete="off">
     <label>팀 코드 (근무자에게 알려줄 암호 · 길게)</label><input type="text" id="szCode" placeholder="예: vivaldi-oak-2026">
+    <p class="meta" style="margin-top:4px">이미 쓰던 팀 코드가 있다면 <b>같은 코드를 그대로</b> 입력하세요. 그러면 다른 기기는 아무것도 다시 할 필요가 없습니다.</p>
     <div id="szerr" class="meta" style="min-height:16px;margin-top:6px"></div>
     <div class="foot"><button class="btn" data-c>취소</button><button class="btn" data-test>토큰 확인</button><button class="btn filled" data-ok>봉인하고 연결</button></div>`);
   const read = () => ({ repo: $('#szRepo').value.trim(), token: $('#szTok').value.trim(), code: $('#szCode').value.trim() });
