@@ -1,0 +1,24 @@
+# 이 저장소는 공개다. 비밀이 실수로 들어가지 않게 막는다.
+.env
+.env.*
+*.pem
+*.key
+*.keystore
+*.jks
+secrets.json
+**/token.txt
+**/*_token*
+**/*.pat
+
+# 빌드·의존성 산출물
+node_modules/
+android/app/build/
+android/build/
+android/.gradle/
+*.apk
+*.aab
+
+# OS/에디터
+.DS_Store
+Thumbs.db
+*.swp

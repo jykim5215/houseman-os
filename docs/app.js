@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.7.2';
+const APP_VERSION = '0.7.3';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -512,16 +512,28 @@ $('#gearBtn').onclick = () => {
     ${connected && st === 'error' ? `<div class="meta" style="color:var(--danger);margin-bottom:8px">${esc(Store.Sync.lastError || '동기화 실패')}</div>` : ''}
     ${connected ? '' : `<button class="btn filled" data-conn style="width:100%;margin-bottom:8px">팀 코드로 연결</button>`}
     ${admin ? `<details style="margin:6px 0" open><summary style="cursor:pointer;font-weight:700;padding:6px 0;font-size:13.5px">관리자 설정</summary>
-      <button class="btn" data-seal style="width:100%;margin:6px 0">팀 서버 만들기 / 토큰 재봉인</button>
-      <div class="qrow" style="padding:8px 0 2px"><span class="ql">AI 도우미</span><span class="qcode" style="background:${AI.enabled() ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${AI.enabled() ? 'var(--ok)' : 'var(--dim)'}">${esc(AI.providerName())}${Store.getSharedAI() ? ' · 팀공유' : ''}</span></div>
+      <div class="qrow" style="padding:6px 0 2px"><span class="ql">팀 코드 연결</span><span class="qcode" id="tjState" style="background:var(--surface-2);color:var(--dim)">확인 중…</span></div>
+      <p class="meta" id="tjHint" style="margin:2px 0 8px">&nbsp;</p>
+      <div class="qrow" style="padding:2px 0"><span class="ql">AI 도우미</span><span class="qcode" style="background:${AI.enabled() ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${AI.enabled() ? 'var(--ok)' : 'var(--dim)'}">${esc(AI.providerName())}${Store.getSharedAI() ? ' · 팀공유' : ''}</span></div>
       <button class="btn" data-ai style="width:100%;margin:4px 0 8px">AI 키 설정 (팀 공유)</button>
       <button class="btn" data-clear style="width:100%;margin:4px 0">예시 데이터 비우기</button>
-      <button class="btn danger" data-reseed style="width:100%;margin-top:6px">예시로 되돌리기</button>
-      </details>` : `<p class="meta" style="margin:2px 0 8px">토큰·AI 키는 관리자가 한 번만 설정하면 이 기기에도 자동 적용됩니다. 따로 입력할 필요 없습니다.</p>`}
+      <details style="margin-top:10px"><summary class="meta" style="cursor:pointer;padding:6px 0">고급 — 토큰 교체·재봉인</summary>
+        <p class="meta" style="margin:4px 0">평소에는 쓸 일이 없습니다. GitHub 토큰이 만료·유출됐거나 팀 코드를 바꿀 때만 사용하세요.</p>
+        <button class="btn" data-seal style="width:100%;margin:4px 0">토큰 재봉인 / 팀 코드 변경</button>
+        <button class="btn danger" data-reseed style="width:100%;margin-top:6px">예시로 되돌리기</button>
+      </details>
+      </details>` : `<p class="meta" style="margin:2px 0 8px">토큰·AI 키는 관리자가 이미 설정해 두었습니다. 이 기기에 자동 적용되므로 따로 입력할 필요가 없습니다.</p>`}
     <hr style="border:none;border-top:1px solid var(--surface-2);margin:12px 0">
     <div class="meta">${esc((me() || {}).name || '')}${admin ? ' · 관리자' : ''} · 버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트</button> · <button style="color:var(--accent)" data-th>다크/라이트</button> · <button style="color:var(--danger)" data-out>로그아웃</button></div>`);
   $('#sheetBody [data-conn]') && ($('#sheetBody [data-conn]').onclick = connectFlow);
   $('#sheetBody [data-seal]') && ($('#sheetBody [data-seal]').onclick = sealSheet);
+  if (admin && $('#tjState')) {
+    Store.Team.fetch().then((tj) => {
+      const s = $('#tjState'), h = $('#tjHint'); if (!s) return;
+      if (tj) { s.textContent = '준비됨 ✓'; s.style.background = 'var(--ok-bg)'; s.style.color = 'var(--ok)'; h.textContent = '다른 기기는 팀 코드만 입력하면 연결됩니다. 토큰을 다시 넣을 필요 없습니다.'; }
+      else { s.textContent = '미설정'; s.style.background = 'var(--warn-bg)'; s.style.color = 'var(--warn)'; h.innerHTML = '아직 팀 코드 연결이 없습니다. 아래 <b>고급</b>에서 한 번만 봉인하세요.'; }
+    });
+  }
   $('#sheetBody [data-ai]') && ($('#sheetBody [data-ai]').onclick = aiSheet);
   $('#sheetBody [data-clear]') && ($('#sheetBody [data-clear]').onclick = () => reqEdit(() => { if (confirm('모든 동의 재고·장비·습득물·하자·톡·로그를 비웁니다. 계속할까요?')) { Store.clearOperational(); closeSheet(); refreshAll(); $('#msgs').innerHTML = ''; briefingCard(); } }));
   $('#sheetBody [data-reseed]') && ($('#sheetBody [data-reseed]').onclick = () => reqEdit(() => { if (confirm('예시 데이터로 되돌립니다(현재 기기 데이터 삭제). 계속할까요?')) { Store.resetSeed(); location.reload(); } }));

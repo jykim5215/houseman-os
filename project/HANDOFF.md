@@ -1,0 +1,189 @@
+# HANDOFF.md — Vivaldi Park Houseman OS
+
+> **원격 작업 안내 (2026-07-24~)**: 이 문서는 저장소 안 `webapp/project/HANDOFF.md`에도 **미러**되어 있다. 원격·클라우드 세션이나 다른 기기는 저장소만 클론하면 이 문서와 `webapp/CLAUDE.md`(작업 규칙)를 바로 읽을 수 있다.
+> **이 파일을 고치면 `webapp/project/`에도 복사할 것**: `Copy-Item HANDOFF.md webapp\project\HANDOFF.md -Force`
+
+> 이 문서는 자기완결적 핸드오프 브리프다. Claude Code와 사용자의 채팅 히스토리를 볼 수 없는 코딩 에이전트(Codex 등)가 **이 파일 하나만 읽고** 프로젝트를 그대로 이어받을 수 있도록 작성했다. 진행 상황이 바뀔 때마다 §6 "현재 상태"를 갱신한다.
+
+---
+
+## 1. 프로젝트 개요와 목표
+
+**Vivaldi Park Houseman OS** — 비발디파크 하우스맨/객실관리 근무자용 로컬 우선(local-first) Windows 데스크톱 업무 플랫폼.
+
+한 문장 요약: NotebookLM처럼 **"등록된 자료만 근거로 답하는 신뢰형 챗봇"**과, Excel처럼 **즉시 수정 가능한 업무 데이터 테이블**이 **같은 SQLite DB를 공유**하는 통합 도구. 재고(타올·린넨·조끼·소모품), 장비(무전기), 습득물, 시설 하자, 업무 인계를 한 앱에서 관리한다.
+
+## 2. 사용자 요구사항 정리 (원문 의도 보존)
+
+### 2-1. 제품 핵심
+- 챗봇과 데이터 테이블은 **같은 SQLite DB와 소스 인덱스를 공유**한다. 테이블에서 직접 수정하면 챗봇 답변에 즉시 반영된다.
+- 챗으로 "B동 타올 30장 차감", "무전기 4번 배터리 불량", "조끼 3개 C동 이동"처럼 말하면 → **변경 미리보기(대상 행, 전→후 값, 사유)를 먼저 표시** → **승인 후에만 DB 반영**.
+- 모든 변경은 **감사 로그** + **Undo** 필수.
+- **오프라인 우선**: AI/네트워크 없이도 조회·수정·검색·import/export가 100% 동작. AI는 부가 계층.
+
+### 2-2. 기술 제약 (위반 금지)
+- 로컬 우선 Windows 데스크톱 앱. **로컬 서버를 띄워 브라우저로 접속하는 방식 금지.** 패키징된 앱이 디바이스에서 자체 구동되고, 언제 실행해도 정상 동작해야 함.
+- 기본 후보: Electron + React + TypeScript + SQLite. 더 가벼운 대안(Tauri 등)이 명확히 유리하면 근거와 함께 이 문서에 제안 가능. (→ §3에서 Electron 채택, 이유 병기)
+- **Excel(xlsx) import/export 필수.**
+- LLM은 **provider 인터페이스로 추상화** (OpenAI/Gemini/Claude 교체 가능). API 키는 OS 자격 증명 저장소(Windows Credential Manager, keytar 등)에 저장. **키가 없으면 mock AI 모드로 전 기능 시연 가능**해야 함.
+- RAG/검색은 초기엔 **SQLite FTS5**(또는 로컬 인덱스), 이후 임베딩 검색으로 확장 가능하게 설계.
+- **바탕화면 원클릭 바로가기 생성.** 아이콘은 리조트/하우스키핑 주제와 관련되게.
+
+### 2-3. 핵심 화면
+1. **홈 상태판**: 타올/조끼/무전기/린넨/소모품 부족(최소 기준 대비), 고장·분실·미반납 장비, 미처리 시설 이관, 습득물 미인계(보관 기한 임박 경고), 금일 특이 객실/VOC/공지, 위험 알림 + 빠른 작업 버튼.
+2. **AI 챗봇 (NotebookLM형)**:
+   - 등록된 문서와 DB 데이터만 근거로 답변. **출처 없는 답변 금지. 모르면 모른다고 답함.**
+   - 답변에 사용한 테이블 행/문서명/수정일/담당자를 출처로 표시. 최신성(수집일·수정일) 표시.
+   - 출처 간 충돌 감지(공식홈 vs 내부 공지 다르면 경고).
+   - 출처 우선순위: ① 객실관리/하우스키핑 내부 공지 → ② 상품지식/VINFO → ③ 공식홈 → ④ 일반 메모/임시 자료.
+   - **고객 안내용 문구와 내부 직원 절차를 분리 출력.** 개인정보·직원 이름·내부 채팅 내용은 고객 안내문에 절대 노출 금지.
+   - "이 내용으로 재고 수정할까요?" 같은 승인형 편집. 애매한 명령은 되물어 확인.
+   - **자동 교대 브리핑**: 근무 시작 시 미반납 장비·부족 재고·미처리 하자·미인계 습득물·전 근무조 특이사항 요약 생성.
+3. **Excel형 업무 테이블**: 컬럼 = 품목/위치/현재 수량/최소 기준/상태/담당자/최근 수정자/수정 시간/비고. 빠른 필터·검색·정렬, 행 단위 수정, 대량 붙여넣기, xlsx import/export, 변경 전/후 diff 미리보기.
+4. **하우스맨 업무 모듈**:
+   - 재고: 타올·린넨·조끼·소모품. 위치는 **동/층/린넨실 트리 구조**.
+   - 무전기/장비: 번호·배터리·고장·대여자·반납 여부 + **QR 스캔 대여/반납**(카메라 없으면 번호 입력 폴백).
+   - 습득물: 객실·위치·품목·귀중품 여부(즉시 인계 플래그)·상황실 인계 여부·사진·처리 상태·**보관 기한 타이머**.
+   - 시설 하자 플로우: 1차 확인 → 2차 조치 → 시설팀 이관 → 완료. 각 단계 사진 첨부.
+   - 업무 인계판: 미완료 요청/특이사항 + **일일 마감 리포트**(당일 변경 요약 xlsx/인쇄).
+   - 공지/지식 소스 관리: 공식홈·밴드 정리본·사내 문서·매뉴얼 (수집일·우선순위·고객공개여부 메타데이터).
+   - 근무자 프로필: **로그인 없이** 근무 시작 시 이름 선택 → 수정자·감사로그·미반납 알림에 자동 반영.
+   - (여유 시) 챗 입력창 음성 입력(STT) 버튼 — 기존 챗 파이프라인 재사용, 승인형 편집과 결합.
+
+### 2-4. AI 편집 안전 규칙
+- AI는 DB를 즉시 수정하지 않는다. 변경 의도/대상 행/전 값/후 값/사유 표시 → 승인 시에만 저장. 저장 후 감사 로그 + Undo. 애매하면 질문.
+- 앱 내부 챗봇 시스템 프롬프트: **지시와 자료를 태그로 분리**해 프롬프트 인젝션 방지(문서 내용 속 지시문 무시), 구조화 출력은 "JSON만 출력" 강제 + 안전 파싱. 근거 인용·거절 규칙·고객/내부 분리 규칙을 시스템 프롬프트에 명시.
+
+### 2-5. MVP 필수 범위
+홈 상태판 / 재고·장비·습득물·시설하자 테이블 / Excel형 편집 UI / xlsx import·export / 자료 기반 챗봇 UI / AI 변경 미리보기·승인·로그·Undo / 소스 문서 관리 / 검색 / 로컬 DB / 근무자 프로필 / 자동 교대 브리핑 / 습득물 기한 경고 / QR 대여·반납 / 샘플 데이터 / README + HANDOFF.md
+
+**v2로 미룸(설계만 확장 가능하게)**: 시즌 수요 패턴·재주문점 자동 제안, 고객 안내문 다국어 변환, 정기 라운딩 체크리스트, LAN 다중 기기 동기화, 임베딩 RAG.
+
+### 2-6. 배포·보안 프로세스 (구현 내내 상시)
+- 코드를 만들 때마다 **배포용 압축 패키지**를 함께 유지. 패키지에서 개인 정보(API 키, 로컬 경로, 테스트 계정) 제거 + 보안 취약점 점검.
+- 코드 수정·결과 보고 때마다 말미에 ① 이번에 개선한 보안 취약점(없으면 "없음") ② HANDOFF.md의 어느 부분을 갱신했는지 한 줄 기록.
+
+### 2-7. UI/UX 원칙
+- 사용자가 말한 그대로만 해석하지 말 것. "실제 하우스맨이 카트를 밀며 태블릿으로 쓴다면?"을 시뮬레이션해 재구성.
+- 서로 다른 화면에 유사·중복 기능이 생기면 **통합 우선**(필요 시 중복 허용).
+- 카드 남용 금지 — 밀도 있고 스캔하기 쉬운 운영 도구. **태블릿(현장 주력)·데스크톱·모바일 모두 고려.**
+
+## 3. 기술 방향 (스택·아키텍처·파일 구조)
+
+### 3-1. 스택 결정
+| 항목 | 선택 | 이유 |
+|---|---|---|
+| 셸 | **Electron** (Tauri 대신) | Tauri가 더 가볍지만 Rust 툴체인이 에이전트 간 핸드오프·Windows 빌드 재현성에 마찰을 만든다. 사용자의 기존 프로젝트(dna-app)도 Electron이라 빌드/배포 노하우 재사용 가능. 오프라인 데스크톱 요구에 electron-builder의 NSIS 인스톨러 + 바탕화면 바로가기 생성이 검증돼 있음. |
+| UI | **바닐라 JS 렌더러 (번들러 없음)** — React+TS에서 변경 | 사용자 요구의 "더 가벼운 대안 허용" 조항 적용. 이유: ① 빌드 툴체인 제거로 어느 에이전트(Codex 등)든 `npm start`만으로 재현 ② 같은 사용자의 dna-app이 동일 패턴으로 검증됨 ③ 화면 수가 적고 테이블 중심이라 프레임워크 이득이 작음. 원문 요구(React) 복귀가 필요하면 renderer/만 교체하면 됨(IPC 계약 유지). |
+| DB | **node:sqlite** (Electron 43 내장 Node 24의 표준 모듈) — better-sqlite3에서 변경 | 네이티브 빌드(@electron/rebuild, VS Build Tools) 불필요. 이 PC의 Electron 43 런타임에서 FTS5 동작 확인 완료. 동기 API·트랜잭션 동일, main 프로세스 전용 + IPC 접근. |
+| 검색 | **SQLite FTS5** (unicode61 tokenizer, 한국어는 bigram 보조 컬럼) | 임베딩 확장 대비 `search/` 모듈로 격리. |
+| xlsx | **exceljs** | import/export + 스타일 출력(마감 리포트 인쇄용). |
+| LLM | 자체 `AiProvider` 인터페이스 (`complete(messages, opts)`) | 구현체: `MockProvider`(키 없을 때 기본), `GeminiProvider`, `OpenAiProvider`, `ClaudeProvider`. 키는 keytar(Windows Credential Manager). |
+| QR | 렌더러에서 `getUserMedia` + jsQR (오프라인 번들) | 카메라 없으면 번호 입력 폴백. |
+| STT | (여유 시) Web Speech API → 실패 시 provider STT | 챗 파이프라인 재사용. |
+
+### 3-2. 프로세스 아키텍처
+- **main 프로세스**: DB 소유(better-sqlite3), 파일 IO, xlsx, LLM 호출, 자격 증명. 모든 기능을 `ipcMain.handle` 채널로 노출.
+- **renderer**: React UI. `contextIsolation: true`, `nodeIntegration: false`, preload에서 화이트리스트 API만 `contextBridge`로 노출.
+- **AI 편집 파이프라인**: 챗 입력 → (AI 또는 규칙 파서) → `ChangeProposal { entity, rowId, field, before, after, reason }[]` JSON → UI 미리보기 → 승인 → `applyProposal()`이 트랜잭션으로 반영 + `audit_log` 기록. Undo는 audit_log 역적용.
+- **RAG 파이프라인**: 소스 문서 등록 → 청크 분할 → FTS5 인덱스 → 질문 시 top-k 검색 + 관련 DB 행 스냅샷 → `<자료>` 태그로 감싸 프롬프트 구성(태그 밖 지시만 유효) → 답변 + 출처 목록 JSON.
+
+### 3-3. 예정 파일 구조
+```
+vivaldi-houseman-os/
+├─ HANDOFF.md / DATA_MODEL.md / UI_CANDIDATES.md / README.md
+├─ prototypes/                     # 1단계 UI 시안 (본 단계 산출물)
+├─ app/
+│  ├─ package.json  electron-builder.yml  vite.config.ts  tsconfig.json
+│  ├─ src/main/
+│  │  ├─ index.ts                  # BrowserWindow, 단일 인스턴스 락
+│  │  ├─ db/ (schema.sql, migrate.ts, repo/*.ts)   # 도메인별 레포지토리
+│  │  ├─ ipc/ (inventory.ts, equipment.ts, lostfound.ts, defects.ts,
+│  │  │        handover.ts, sources.ts, chat.ts, xlsx.ts, audit.ts)
+│  │  ├─ ai/ (provider.ts, mock.ts, gemini.ts, openai.ts, claude.ts,
+│  │  │       prompts/, proposal.ts, rag.ts)
+│  │  ├─ xlsx/ (importer.ts, exporter.ts, dailyReport.ts)
+│  │  └─ security/ (credentials.ts)
+│  ├─ src/preload/index.ts
+│  ├─ src/renderer/                # React 앱 (화면 구조는 UI 선택 후 확정)
+│  │  ├─ screens/ (Home, Tables, Chat, LostFound, Defects, Handover, Sources, Settings)
+│  │  └─ components/ (DataGrid, DiffPreview, SourceBadge, DdayTag, QrScanner…)
+│  ├─ resources/icon.ico           # 리조트/하우스키핑 테마 아이콘
+│  └─ tests/                       # vitest: proposal 파서, undo, xlsx 왕복, 검색
+└─ dist-package/                   # 배포용 zip (개인정보 제거본)
+```
+
+## 4. 구현 계획 (마일스톤 순서와 설계 결정)
+
+1. **M0 — 골격**: Electron+Vite+TS 부트스트랩, DB 스키마(`DATA_MODEL.md` 그대로) + 마이그레이션 + 샘플 데이터 시더, IPC 계층, 근무자 선택 화면.
+2. **M1 — 테이블 코어**: DataGrid(재고/장비/습득물/하자 공용 컴포넌트 1개로 통합 — 중복 기능 통합 원칙), 행 편집 + diff 미리보기 + audit_log + Undo, 필터/검색/정렬, xlsx import/export.
+3. **M2 — 홈 상태판**: 부족/미반납/기한 임박/미처리 집계 쿼리(뷰), 위험 알림, 빠른 작업(테이블 편집 파이프라인 재사용).
+4. **M3 — 챗봇**: MockProvider로 전체 파이프라인(RAG 검색 → 출처 인용 → ChangeProposal → 승인 반영) 완성 후 실제 provider 연결. 자동 교대 브리핑(DB 집계만으로 생성 — AI 없이도 동작, AI 있으면 문장 다듬기).
+5. **M4 — 모듈 완성**: QR 대여/반납, 습득물 기한 타이머·사진, 하자 단계 플로우, 인계판 + 일일 마감 리포트.
+6. **M5 — 패키징**: electron-builder NSIS, 바탕화면 바로가기, 아이콘, README, 배포 zip 정리 + 보안 점검.
+
+핵심 설계 결정:
+- **편집 경로 단일화**: 테이블 직접 수정·챗 승인 편집·빠른 작업 버튼이 전부 동일한 `applyProposal()` 하나를 거친다 → 감사 로그/Undo 일관성 보장, 기능 중복 제거.
+- **AI 없이 완결**: 브리핑·상태판·검색은 SQL만으로 동작하고 AI는 문장화/자연어 해석만 담당 → mock 모드 100% 시연 가능.
+- **재고 수치는 절대값 수정이 아니라 "변경 이벤트(±n, 사유)"로 기록**하고 현재값은 파생 → 감사·Undo·일일 리포트가 자연스럽게 나온다.
+
+## 5. 제약 조건 (요약)
+- 로컬 서버 + 브라우저 접속 방식 **금지**. 패키징된 앱 자체 구동.
+- 오프라인에서 조회·수정·검색·import/export 100% 동작.
+- AI는 승인 없이 DB를 수정할 수 없음. 감사 로그·Undo 필수.
+- API 키·로컬 경로·테스트 계정은 배포 패키지에서 제거. 자격 증명은 OS 저장소에.
+- 바탕화면 원클릭 바로가기 + 주제 관련 아이콘.
+- 배포용 압축 패키지를 코드와 함께 상시 유지, 보고 때마다 보안 점검 + HANDOFF 갱신 기록.
+- 1단계(설계·시안) 완료 후 **사용자가 UI 후보를 선택하기 전에는 구현 코드를 작성하지 않는다.**
+
+## 5-1. v2 개정 (2026-07-22) — 최신 우선 사항
+
+사용자가 두 차례 방향을 갱신했다. **아래가 §2~§4보다 우선한다.**
+
+1. **플랫폼 전환**: 데스크톱 Electron(§3)에서 **휴대폰/태블릿용 PWA**로 전환. GitHub Pages로 배포해 푸시 즉시 전 기기 자동 업데이트. 데이터 공유는 GitHub 저장소를 DB로 사용(코드=공개 `jykim5215/houseman-os`, 데이터=비공개 `jykim5215/houseman-os-data`, 각 기기가 앱 설정에서 fine-grained PAT 입력). 두 저장소는 생성 완료. `webapp/docs/store.js`(로컬 저장 + GitHub 동기화 + 감사로그/Undo 데이터 계층)까지 작성된 상태에서 UI 재설계 지시로 **일시 중단** — UI 확정 후 이 데이터 계층 위에 새 UI를 얹어 재개한다.
+2. **UI 전면 교체 (CLAUDE_CODE_PROMPT_v2_UI.md)**: NotebookLM(Gemini Notebook) 안드로이드 앱 디자인 언어 계승. 안드로이드 태블릿 1순위·데스크톱 2순위. 하단 3탭 **챗(기본) / 소스&데이터 / 스튜디오**. Outlined 단선 아이콘(24px 그리드), Google Sans/Roboto 톤, 단일 강조색+절제된 시맨틱 컬러, 다크 모드, 큰 라운드(16~28px)·pill 칩, 테이블 내부는 밀도 유지. 번호형 출처 칩([1][2]→근거 이동), 승인형 편집 인라인 카드, 추천 질문 칩, 음성 입력 버튼. 상태판은 별도 탭이 아니라 챗 화면의 요약 스트립/칩. 엑셀형 테이블 기능 전부(필터·검색·정렬·행 수정·대량 붙여넣기·xlsx·diff)는 소스&데이터 탭에 보존. 스튜디오 = 교대 브리핑·일일 마감 리포트·(v2)다국어 변환 생성.
+3. v1 Electron 앱(`app/`)과 v1 시안 3종은 참고용으로 유지하되 선택·개발 대상 아님. Electron 앱의 파서/브리핑/제안 파이프라인 로직은 웹으로 이식할 때 참조.
+
+## 6. 현재 상태와 다음 할 일
+
+**상태: 모바일 PWA v0.3.0 배포·운영 중 — https://jykim5215.github.io/houseman-os/**
+(코드: github.com/jykim5215/houseman-os 공개 · 데이터: houseman-os-data 비공개 · 로컬 소스: `webapp/` 독립 git 저장소. 다음 할 일 후보: 관리자 PAT 발급 후 기기 연결로 동기화 실전 확인 → QR 카메라 스캔, xlsx import, 실제 LLM provider. 아래 v0.1 기록은 데스크톱 Electron 시절의 역사적 참고.)
+
+**(이전) v0.1 구현 완료 (M0~M2 + M3·M4 일부). 앱이 구동되고 코어 테스트 14/14 통과.**
+
+**UI 결정: 사용자가 Style B (Excel Ops)를 선택** — 밝은 엑셀형 테이블 중심 UI를 골격으로 채택. 상태판(A 요소)과 챗 도킹 패널(C 요소)은 Style B 테마 안에 보조 화면으로 구현했다.
+
+완료 (v0.1, `app/`):
+- Electron 43 + node:sqlite(FTS5 확인) + 바닐라 JS 렌더러. 스키마·시더(`src/main/schema.sql`, `seed.js`)
+- **편집 단일 경로**: `src/main/proposal.js`의 `applyChange/applyProposal` — 테이블 편집·챗 승인·xlsx import 전부 이 경로 → 감사 로그 + Undo(역적용, 이중 취소 방지). 필드 화이트리스트로 임의 컬럼 수정 차단
+- 재고는 이벤트 소싱(`stock_moves`), 현재값은 `v_stock` 뷰
+- 규칙 파서 `parser.js`: 차감/보충/장비 상태/습득물 인계/하자 단계, 애매하면 clarify로 되묻기 (AI 키 없이 승인형 편집 동작)
+- 검색 `search.js`: FTS5(폴백 LIKE) + 출처 우선순위 정렬 + 충돌 감지. mock AI `ai/provider.js`: DB 집계 답변 + 문서 근거 답변 + 근거 없으면 거절. 고객용/내부용 분리 표시
+- 상태판·교대 브리핑 `briefing.js` (SQL 집계, 근무자 선택 직후 자동 표시)
+- xlsx `xlsx.js`: 재고 export / import(diff 미리보기→일괄 승인) / 일일 마감 리포트. 왕복 테스트 통과
+- 렌더러: 상태판 / 테이블 4탭(셀 편집→diff 저장 바) / 인계판 / 자료 등록(챗 검색 즉시 반영) / 감사 로그(↩ Undo) / 챗 도킹 패널 / 장비 번호 입력 대여·반납(QR 폴백) / 습득물 D-day·귀중품 경고 / 하자 단계 진행
+- 근무자 선택(로그인 없음) → 수정자·감사 로그 반영. 보안: contextIsolation + preload 화이트리스트 + CSP
+- `npm run shortcut`(바탕화면 바로가기, 산+침대 아이콘), `npm run dist`(배포 zip, 화이트리스트 방식), `scripts/make-icon.ps1`
+- 테스트 `tests/core.test.mjs` 14개 전부 통과 (Undo·트랜잭션 롤백·파서·검색·xlsx 왕복 포함)
+
+다음 할 일 (우선순위순):
+1. **QR 카메라 스캔** (`getUserMedia` + jsQR 번들) — 현재는 번호 입력 폴백만
+2. **실제 LLM provider** (Gemini/OpenAI/Claude) — `ai/provider.js`의 `answer()` 계약 구현 + keytar 키 저장 + 설정 화면. 프롬프트는 지시/자료 태그 분리(§2-4)
+3. 습득물·하자 **사진 첨부** (파일 복사 → userData/photos, photo_path 저장)
+4. 대량 붙여넣기(클립보드 TSV → diff 미리보기), 테이블 정렬 UI
+5. electron-builder NSIS 설치본 검증(`npm run installer`), 앱 자동 시작 시 브리핑 뜨는 흐름 다듬기
+
+변경 이력:
+- 2026-07-24: **v0.7.1 / v0.7.2 팀 코드 활성화 + 상황실 물품 + 객실 구조**. ① **`docs/team.json` 커밋 완료** → 팀 코드 연결이 실제로 활성화됨(라이브 HTTP 200 확인). 사장님이 앱에서 봉인해 만든 암호문 blob(repo=jykim5215/houseman-os-data, iter 20만, AES-GCM)이며 토큰 평문은 어디에도 없음. 이제 모든 기기가 **팀 코드 1회**로 연결. ② **상황실 구비 물품 45종**을 현장 카드로 등록(`seedSupplies`, cat 접두사 `상황실 · `): 조리기구/식기·수저/칼·도구/주방 소모품/욕실/리모컨·가전/청소·환경/휴지·티슈/식음료/수건. **`blds` 다중 동 스코프** 신설(A·B·C·캄·E 공통), 수건만 동별 분기(A/B/C=일반타올만, 캄/D(호텔)/E(펫)=바스·일반·페이스 3종). `renderQuick`이 `bld`/`*`/`blds` 모두 표시. ③ **비파괴 마이그레이션(중요)**: `SEED_VERSION` 상향 시 재고·톡·로그를 **지우던 코드를 제거** — 이제 동 목록 갱신 + 누락 참고자료 추가만. 실데이터 유실 위험 해소. ④ **단지·객실 구조 자료**(`src-rooms-vp`, 전 동 공통): 소노벨 A 87.6㎡(침실2·화장실2)/B 85.9㎡(화장실2)/C 92.5㎡(**화장실1**)/D 46.62㎡ 호텔 2~9층 2인, 소노캄(패밀리4·스위트5·소노캄A 3·소노캄B 4), 소노펫(패밀리4·스위트5·실버6·골드7 + 45kg·접종·매너벨트·1.5m 리드줄). **객실 평면도 이미지는 공식 저작물이라 미포함**(텍스트 구조만), 미수집 항목 명시. ⑤ `VIVALDI_PARK_OFFICIAL_SOURCE_1.md`는 기존 등록본과 내용 동일(중복)이라 재등록 안 함.
+- 2026-07-24: **v0.7.0 팀 코드 통합 온보딩 + 인증 강화**. ① **온보딩 통합(팀 코드)**: 첫 실행 → 팀 코드 1회 입력(`teamGate`) → `Team.unlock`이 토큰 복호화·`Sync.configure`·pullPush → 계정·AI키 자동 동기화 → 로그인. 근무자는 토큰/키를 볼 일도 입력할 일도 없음. `boot()`가 연결여부·로그인여부로 분기. ② **앱 내 봉인(`sealSheet`)**: 관리자가 토큰+팀코드 입력 → 이 기기 즉시 연결 + `Store.Team.seal()`이 team.json 암호문 blob 생성(복사용 textarea). 이 blob을 저장소 `docs/team.json`에 커밋해야 다른 기기가 팀 코드로 연결됨. **seal↔unlock 왕복·오답거부 라이브 검증**. ③ **AI 키 팀 공유 기본 ON**(관리자) → 연결된 다른 기기에 `applySharedAI`로 자동 적용. ④ **설정 역할 분리**: 근무자=최소(연결상태·로그아웃·테마), 관리자만 봉인·AI키·초기화. 토큰/키 필드가 근무자에게 안 보임. ⑤ **인증 강화**: PBKDF2 150k→**310k**, 계정별 `iter` 저장(로그인 성공 시 자동 상향), 세션을 sessionStorage→**localStorage**(로그인 유지), `Auth.setPassword`/`hasAdmin` 추가. **미해결(1회)**: 관리자가 fine-grained PAT 발급→앱 봉인→나온 team.json blob을 커밋(사장님이 blob을 주면 내가 커밋). 그 후 모든 기기는 팀 코드만.
+- 2026-07-24: **v0.6.2 챗 답변 정리·애니메이션**. ① **묻는 것만 답변**: `Logic.extract()`가 질문 토큰과 관련된 문장 조각만 추출(전체 나열 방지). 토큰 조사 보존('있는'이 '있'으로 뭉개지지 않게), 동점 시 짧은 조각 우선. 검증: "컴퓨터 있는 층?"→"컴퓨터 있는 층 3F·11F."만, 창고·의자 안 나옴. ② **가벼운 마크다운 렌더**(`app.js` `md()`): 표(| |)·불릿(- )·굵게·코드. LLM 프롬프트에 "묻는 것만·표/불릿 정리·서론 금지" 규칙. ③ **애니메이션**(apple-design 기반): NotebookLM식 "생각 중" 점 애니메이션(`.thinking`), 메시지 등장 모션(`msgin`, ease-out `cubic-bezier(.23,1,.32,1)`, 오버슈트 없음), reduce-motion 존중. 주의: GitHub Pages HTTP 캐시 10분 때문에 검증 시 구 logic.js가 남을 수 있음 — SW는 network-first라 실기기는 새로 받음.
+- 2026-07-24: **v0.6.1 공식 자료 등록 + AI 키 팀 공유**. ① 소노 공식홈 자료(입퇴실·조기입실 요금·객실 비품 차이·인원/침구 추가·미성년자·분실물 1개월/기부/책임한계·오션월드·스키·응대 원칙)를 **공통 소스(bld='*')** 로 등록 — `Logic.searchSources`/`snapshot`/`renderSources`가 `*`를 전 동에서 포함. 공개 정보만. ② 시드 멱등화(`S()`/`q()` 존재 가드) + `SEED_VERSION 7`로 기존 기기도 자동 수급. 라이브 검증(A동·소노캄에서 검색됨, officialCount=1). 주의: `answer()`가 "분실물" 키워드를 DB 습득물 집계로 먼저 가로챔 — 정책 질문은 LLM 연결 시 정확(스냅샷에 공식 소스 포함). ③ **AI 키 팀 공유**: `Store.setSharedAI/getSharedAI`(config.aiShared→비공개 저장소 동기화), `applySharedAI()`가 미설정 기기에 자동 적용. 관리자만 "팀 공유" 체크(키 입력은 사용자). **미해결**: 무료 Gemini 키·데이터 저장소 PAT는 사장님이 발급→앱 설정에 붙여넣기.
+- 2026-07-24: **v0.6.0 배포**. ① **실제 로그인**: 이름+비밀번호 계정(PBKDF2 15만회, 공유 DB에 저장·동기화) + **관리자/근무자 역할**. PIN 방식 폐기, 관리자만 수정 가능. 첫 실행 시 관리자 계정 생성 화면, 이후 로그인 화면. 설정에서 계정 추가·권한 변경·삭제. ② **LLM 연동**(`ai.js`): Claude/Gemini/OpenAI provider 추상화, **사용자 키는 기기 localStorage에만** 저장(내가 키를 다루지 않음), 설정에 연결 테스트. 규칙으로 못 푸는 자유 문장을 처리하고, 자료/지시 태그 분리로 프롬프트 인젝션 방지, 수정은 JSON 제안만 → 승인 후 반영. ③ **규칙 파서 확장**: 공지 초기화/삭제, 공지 등록, 도움말 — "공지내용 초기화 해줘"가 오류 대신 삭제 미리보기로 동작. ④ **완료보고 자동 연동**: 승인 즉시 톡에 완료 카드(시각·처리내역·작성자) 기록. ⑤ **카메라 촬영** 버튼(capture=environment). ⑥ **동 구성 수정**: A 체리 / B 오크 / C 파인 / 캄 소노캄 / D 메이플(호텔) / E 노블리안(펫). ⑦ **샘플 데이터 전면 제거** — 가짜 이름·무전기·톡 삭제, `seedVersion`으로 기존 기기도 자동 정리. 시드에는 실제 업무 자료(현장 카드·지식 소스)만. ⑧ 파인동(C) 업무 카드·서비스 평가 기준 자료 추가. ⑨ **수정 흔적 배지**: 모든 행에 `✎ 날짜 시각 · 수정자`. ⑩ **보안 수정**: v0.5 시드에 들어가 있던 도어락 비번·내부 전화번호를 공개 저장소에서 제거하고 비공개 저장소로만 이전(직원 연락처도 비공개 전용). 라이브 검증 완료(로그인·오답거부·역할·수정흔적·공지초기화·완료보고 자동기록, 콘솔 에러 0).
+- 2026-07-24: **v0.6.0 공유서버 수리 + Gemini 기본화**. 진단: team.json 미봉인(404)이라 "팀 암호" 경로 불가 + 시드 랜덤 id로 기기 간 중복. 조치: ① 설정에 **"GitHub 토큰으로 바로 연결"**(저장소 `jykim5215/houseman-os-data` 프리필 + 토큰 발급 링크 + 테스트 버튼), 동기화 오류 표시(`Sync.lastError`). ② **시드 id 결정적화**(`q-${bld}-${cat}-${label}`, `src-B-oak`/`src-C-pine`/`src-eval`) → 기기 간 자동 수렴. ③ 원격 `data/db.json`을 전체 스키마로 복구(동 목록 6개 + 사장님이 올린 민감 현장카드 27건 보존, 나머지 빈 컬렉션). ④ 동 id 정정 캄 포함(A체리·B오크·C파인·캄소노캄·D메이플호텔·E노블리안펫). ⑤ **Gemini**를 AI 기본 제공사로(무료), 키는 `x-goog-api-key` 헤더 전송(URL 미노출), flash/flash-lite/pro. ⑥ 공개 코드에서 민감 placeholder까지 제거. 검증: 로그인·CORS(github.io→api.github.com 통과)·토큰/AI 시트·동 목록 라이브 확인. **미해결(credential이라 대신 발급 불가)**: 무료 Gemini 키(aistudio.google.com/apikey)와 데이터 저장소용 fine-grained PAT를 사장님이 발급→각 시트에 붙여넣기.
+- 2026-07-24: **v0.5.0 배포 (대규모 개편)**. ① **동별 완전 분리(A~E)**: 데이터 계층을 다중 동으로 재설계(`store.js` — 모든 레코드에 `bld`, 헤더 동 선택기, `Store.inBld()`로 스코프). 동 = 체리(A)·오크(B)·파인(C)·소노캄(D)·노블리안(E). 샘플은 B에만, 나머지는 빈 상태+환영 공지. ② **챗 2모드**: 묻기(읽기 전용)/관리(수정). 관리 진입 시 **관리자 PIN**(SHA-256+salt, `Store.Admin`, 세션 유지). ask 모드에서 수정 명령은 거부+전환 안내. ③ **팀 톡 탭**(신규): 메시지·공지(상단 강조)·완료보고(시간·처리내역)·사진 첨부(canvas 압축→`files` 컬렉션). 공유 서버로 준실시간(20초). ④ **스튜디오 대화 요약** 카드 추가. ⑤ **정량 없는 품목**: `stock.min=null`이면 부족 경보 대상 아님(수건 등). 품목 추가 시 "최소 기준 정하기" 체크. ⑥ **초기화**: 설정→예시 비우기(`clearOperational`)/되돌리기(`resetSeed`). ⑦ **디자인 전면 개편**: 파란색→따뜻한 teal(#1f6f63)+clay 팔레트, warm bg(#faf7f2), 다크도 웜톤, 4탭, 정렬·모션(ease)·군더더기 정리, 그림자 절제. ⑧ **오리지널 로고/아이콘**: 비발디 공식 로고는 상표라 미복제 — 산+물결 오리지널 마크(teal→clay 그라디언트 스퀴클), PNG 재생성. 동기화 merge에 messages/files/config(PIN, updatedAt 최신 우선)/buildings/workers 병합 추가. 데이터 저장소 db.json은 v0.5 스텁으로 교체(첫 연결 시 로컬 시드 업로드). APK도 v0.5로 재빌드. 라이브 검증 완료(PIN·톡·동 전환·수건 정량없음·ask 거부, 콘솔 에러 0).
+- 2026-07-22: **v0.4.0 배포**. ① **공유가 기본**: 각 기기 토큰 입력 대신 **팀 연결코드(암호)** 도입 — 공개 `docs/team.json`에 토큰을 AES-GCM+PBKDF2(20만회)로 암호화해 담고, 근무자는 첫 실행 때 팀 암호만 입력하면 복호화→동기화 연결(기기당 1회, 이후 자동). 관리자용 오프라인 봉인 도구 `docs/seal.html`(토큰+저장소+팀암호→team.json 출력). **team.json은 관리자가 seal.html로 만들어 커밋해야 활성화**(없으면 조용히 로컬). 암복호화 왕복+오답 거부 라이브 검증 완료. ② **근무자 강제 팝업 제거** — 이름은 헤더 칩에서 선택 입력(감사 로그 표기용, 비강제). ③ **디자인 정제**(Google/Material 톤): 라운드 확대(28/20/14), 말풍선 비대칭 라운드, 네비 M3 스타일, 버튼/바텀시트/헤더 다듬기, 그림자 절제. ④ **안드로이드 APK**: `android/twa-manifest.json`(Bubblewrap, fallbackType=webview — 프로젝트 페이지라 TWA 자산링크 불가하므로 WebView 전체화면) + `.github/workflows/android-apk.yml`(GitHub Actions에서 빌드→`apk-latest` Release에 `houseman-note.apk` 첨부, ~1MB). 빌드 성공 확인. 안정적 업데이트용 keystore는 `signing-keystore` 아티팩트→`ANDROID_KEYSTORE_B64`/`ANDROID_KEYSTORE_PASSWORD` 시크릿으로 저장 시 고정.
+- 2026-07-22: **웹앱 v0.2.0 → v0.3.0 배포**. v0.2.0: Style C PWA를 `jykim5215/houseman-os`에 푸시, GitHub Pages(main:/docs) 활성화. `docs/` = index.html + styles.css + app.js(UI) + logic.js(파서·집계·검색) + store.js(로컬 저장 + GitHub 동기화 + 감사로그/Undo) + sw.js + manifest + version.json. 업데이트 흐름: 푸시 → 앱이 version.json 감지 → "지금 업데이트" 배너. v0.3.0: ① Pretendard 웹폰트 + 그림자 제거(플랫 라인) UI 정리, 군더더기 제거(다크모드 버튼→설정, 챗 안내문·who행·툴바 CSV 제거) ② 스튜디오 최상단 **현장 카드**(quickref 컬렉션) — 도어락 비번·전화번호·창고·에어컨·객실타입·카드키. **민감 정보라 공개 코드에는 빈 배열, 실데이터는 비공개 houseman-os-data의 data/db.json에 시드**(동기화 시 표시) ③ "오크동(B) 하우스맨 업무 카드"를 지식 소스로 데이터 저장소에 추가 ④ KST 타임존·바텀시트 rAF 버그 수정. 라이브 검증 완료. xlsx는 웹에서 CSV로 대체(전용 xlsx 추후).
+- 2026-07-17: 최초 작성 (1단계 산출물 전체).
+- 2026-07-17: 사용자 Style B 선택 → v0.1 구현 완료. 스택 편차 기록(§3: node:sqlite, 바닐라 렌더러).
+- 2026-07-22: **v2 개정(§5-1)** — 휴대폰/태블릿 PWA + GitHub 배포·동기화로 전환, NotebookLM 디자인 언어로 UI 재설계. 신규 시안 3종(`prototypes/style-a-notebook-classic.html`, `style-b-split-ops.html`, `style-c-command-chat.html`) 작성, UI_CANDIDATES.md v2 갱신. **사용자가 v2 시안 중 Style C(Command Chat)를 선택(2026-07-22) → webapp 구현 재개.**
+- 2026-07-17: UI 프로페셔널 개편 — `renderer/styles.css` 디자인 시스템 전면 재작성(토큰: 저채도 팔레트·그림자·radius·커스텀 ease-out), 절제된 모션 규칙(진입 요소만 @starting-style로 200ms 이하, transform/opacity만, 탭 등 고빈도 동작은 무동작, prefers-reduced-motion 대응), 버튼 press 피드백(scale .97), focus-visible 링, 상태 칩 점 인디케이터, 부족/주의 행은 좌측 컬러 바+옅은 틴트, 상단바 브랜드 아이콘(renderer/icon.png). 마크업·로직 변경 없음(index.html h1 한 줄만).
