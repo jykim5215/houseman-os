@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.7.3';
+const APP_VERSION = '0.7.4';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -509,7 +509,9 @@ $('#gearBtn').onclick = () => {
   const stLabel = connected ? ({ synced: '연결됨 ✓', syncing: '동기화 중…', error: '오류', idle: '연결됨' }[st] || '연결됨') : '미연결';
   sheet(`<h3>설정</h3>
     <div class="qrow" style="padding:0 0 6px"><span class="ql">공유 서버</span><span class="qcode" style="background:${connected ? 'var(--ok-bg)' : 'var(--surface-2)'};color:${connected ? 'var(--ok)' : 'var(--dim)'}">${stLabel}</span></div>
-    ${connected && st === 'error' ? `<div class="meta" style="color:var(--danger);margin-bottom:8px">${esc(Store.Sync.lastError || '동기화 실패')}</div>` : ''}
+    ${connected && st === 'error' ? `<div class="meta" style="color:var(--danger);margin-bottom:6px">${esc(Store.Sync.lastError || '동기화 실패')}</div>` : ''}
+    ${connected ? `<button class="btn" data-diag style="width:100%;margin-bottom:4px">연결 진단</button>
+    <div id="diagOut" class="meta" style="min-height:16px;margin-bottom:8px"></div>` : ''}
     ${connected ? '' : `<button class="btn filled" data-conn style="width:100%;margin-bottom:8px">팀 코드로 연결</button>`}
     ${admin ? `<details style="margin:6px 0" open><summary style="cursor:pointer;font-weight:700;padding:6px 0;font-size:13.5px">관리자 설정</summary>
       <div class="qrow" style="padding:6px 0 2px"><span class="ql">팀 코드 연결</span><span class="qcode" id="tjState" style="background:var(--surface-2);color:var(--dim)">확인 중…</span></div>
@@ -526,6 +528,15 @@ $('#gearBtn').onclick = () => {
     <hr style="border:none;border-top:1px solid var(--surface-2);margin:12px 0">
     <div class="meta">${esc((me() || {}).name || '')}${admin ? ' · 관리자' : ''} · 버전 ${APP_VERSION} · <button style="color:var(--accent)" data-upd>업데이트</button> · <button style="color:var(--accent)" data-th>다크/라이트</button> · <button style="color:var(--danger)" data-out>로그아웃</button></div>`);
   $('#sheetBody [data-conn]') && ($('#sheetBody [data-conn]').onclick = connectFlow);
+  $('#sheetBody [data-diag]') && ($('#sheetBody [data-diag]').onclick = async (ev) => {
+    const out = $('#diagOut'); ev.target.textContent = '진단 중…';
+    out.style.color = 'var(--dim)'; out.textContent = '';
+    const r = await Store.Sync.diagnose();
+    out.style.color = r.ok ? 'var(--ok)' : 'var(--danger)';
+    out.textContent = (r.ok ? '✓ ' : '✗ ') + r.msg;
+    if (r.ok) { try { await Store.Sync.pullPush(); refreshAll(); } catch {} }
+    ev.target.textContent = '연결 진단';
+  });
   $('#sheetBody [data-seal]') && ($('#sheetBody [data-seal]').onclick = sealSheet);
   if (admin && $('#tjState')) {
     Store.Team.fetch().then((tj) => {
@@ -564,7 +575,7 @@ function sealSheet() {
   $('#sheetBody [data-test]').onclick = async (ev) => {
     const v = read(); if (!v.repo || !v.token) return alert('저장소와 토큰을 입력하세요');
     ev.target.textContent = '확인 중…';
-    try { const ok = await Store.Sync.test({ repo: v.repo, token: v.token, branch: 'main', path: 'data/db.json' }); $('#szerr').style.color = ok ? 'var(--ok)' : 'var(--danger)'; $('#szerr').textContent = ok ? '✓ 토큰 정상' : '✗ 실패 — 토큰/저장소 확인'; }
+    try { const r = await Store.Sync.diagnose({ repo: v.repo, token: v.token, branch: 'main', path: 'data/db.json' }); $('#szerr').style.color = r.ok ? 'var(--ok)' : 'var(--danger)'; $('#szerr').textContent = (r.ok ? '✓ ' : '✗ ') + r.msg; }
     catch (e) { $('#szerr').style.color = 'var(--danger)'; $('#szerr').textContent = e.message; }
     ev.target.textContent = '토큰 확인';
   };

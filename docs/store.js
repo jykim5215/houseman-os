@@ -320,6 +320,12 @@ const Store = (() => {
     }
     const norm = (d) => JSON.stringify({ ...d, rev: 0, updatedAt: 0 });
 
+    // 저장소 자체에 접근 가능한지 (contents 404가 '파일 없음'인지 '권한 없음'인지 구분용)
+    const repoInfo = () => fetch(`https://api.github.com/repos/${cfg.repo}`, {
+      headers: { 'Authorization': 'Bearer ' + cfg.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    });
+    async function ghMsg(res) { try { const j = await res.clone().json(); return j && j.message ? ' — ' + j.message : ''; } catch { return ''; } }
+
     async function pullPush() {
       if (!cfg || !cfg.repo || !cfg.token) return;
       setStatus('syncing');
@@ -328,9 +334,16 @@ const Store = (() => {
         let remote = null;
         const res = await api(path);
         if (res.status === 200) { const j = await res.json(); lastSha = j.sha; remote = JSON.parse(b64d(j.content)); }
-        else if (res.status === 404) lastSha = null;
-        else if (res.status === 401 || res.status === 403) throw new Error('토큰 권한 오류 (' + res.status + ')');
-        else throw new Error('서버 응답 ' + res.status);
+        else if (res.status === 404) {
+          // 파일이 없는 건지, 저장소에 접근을 못 하는 건지 구분
+          const rr = await repoInfo();
+          if (rr.status === 404) throw new Error(`저장소에 접근할 수 없습니다 (${cfg.repo}). 토큰이 이 저장소를 선택하지 않았거나 만료됐습니다.`);
+          if (rr.status === 401) throw new Error('토큰이 만료·무효입니다 (401). 관리자에게 재봉인을 요청하세요.');
+          lastSha = null; // 저장소는 보이는데 파일만 없음 → 새로 만든다
+        }
+        else if (res.status === 401) throw new Error('토큰이 만료·무효입니다 (401)');
+        else if (res.status === 403) throw new Error('접근이 거부됐습니다 (403)' + (await ghMsg(res)));
+        else throw new Error('서버 응답 ' + res.status + (await ghMsg(res)));
 
         const merged = remote ? merge(remote, db) : db;
         if (JSON.stringify(merged) !== JSON.stringify(db)) {
@@ -340,7 +353,13 @@ const Store = (() => {
         if (!remote || norm(remote) !== norm(merged)) {
           const put = await api(path, { method: 'PUT', body: JSON.stringify({ message: `sync ${DEVICE} ${now()}`, content: b64e(JSON.stringify(merged)), branch: cfg.branch || 'main', ...(lastSha ? { sha: lastSha } : {}) }) });
           if (put.status === 409 || put.status === 422) { setStatus('idle'); return schedule(1500); }
-          if (!put.ok) throw new Error('업로드 실패 ' + put.status);
+          if (put.status === 404) {
+            // 읽기는 됐는데 쓰기가 404 → GitHub이 권한 부족을 404로 가린 것
+            throw new Error('쓰기 권한이 없습니다. 토큰 권한을 Contents: Read and write 로 다시 발급해 재봉인하세요.');
+          }
+          if (put.status === 401) throw new Error('토큰이 만료·무효입니다 (401)');
+          if (put.status === 403) throw new Error('쓰기가 거부됐습니다 (403)' + (await ghMsg(put)));
+          if (!put.ok) throw new Error('업로드 실패 ' + put.status + (await ghMsg(put)));
           const pj = await put.json(); lastSha = pj.content && pj.content.sha;
         }
         setStatus('synced');
@@ -353,7 +372,39 @@ const Store = (() => {
       schedule, pullPush,
       onStatus(f) { listeners.push(f); }, onChange(f) { onRemoteChange = f; },
       start() { if (cfg) schedule(100); setInterval(() => { if (cfg && document.visibilityState === 'visible') pullPush(); }, 20000); document.addEventListener('visibilitychange', () => { if (cfg && document.visibilityState === 'visible') schedule(300); }); },
-      async test(c) { const s = cfg; cfg = c; try { const r = await api(c.path || 'data/db.json'); cfg = s; return r.status === 200 || r.status === 404; } catch { cfg = s; return false; } },
+      // 저장소 접근 + 쓰기 권한까지 확인 (404를 무조건 통과시키던 버그 수정)
+      async test(c) { const r = await this.diagnose(c); return r.ok; },
+      /* 연결 진단: 어디서 막혔는지 정확히 알려준다 */
+      async diagnose(c) {
+        const target = c || cfg;
+        if (!target || !target.repo || !target.token) return { ok: false, step: 'config', msg: '저장소·토큰이 설정되지 않았습니다.' };
+        const s = cfg; cfg = target;
+        const done = (r) => { cfg = s; return r; };
+        try {
+          // 1) 저장소 접근
+          const rr = await repoInfo();
+          if (rr.status === 401) return done({ ok: false, step: 'token', msg: '토큰이 만료·무효입니다 (401). 새 토큰으로 재봉인하세요.' });
+          if (rr.status === 404) return done({ ok: false, step: 'repo', msg: `저장소에 접근할 수 없습니다 (${target.repo}). 토큰 발급 시 이 저장소를 선택했는지 확인하세요.` });
+          if (!rr.ok) return done({ ok: false, step: 'repo', msg: `저장소 확인 실패 (${rr.status})` });
+          const info = await rr.json();
+          // 2) 쓰기 권한 (fine-grained PAT는 권한 부족을 404로 가리므로 여기서 미리 잡는다)
+          // permissions 필드가 없으면 판단을 미룬다(오탐 방지). 명시적으로 push=false 일 때만 읽기 전용으로 확정.
+          if (info.permissions && info.permissions.push === false) {
+            return done({ ok: false, step: 'write', msg: '이 토큰은 읽기 전용입니다. 토큰 권한을 Contents: Read and write 로 다시 발급해 재봉인하세요.' });
+          }
+          // 3) 브랜치
+          const want = target.branch || 'main';
+          if (info.default_branch && info.default_branch !== want) {
+            const br = await fetch(`https://api.github.com/repos/${target.repo}/branches/${want}`, { headers: { 'Authorization': 'Bearer ' + target.token, 'Accept': 'application/vnd.github+json' } });
+            if (!br.ok) return done({ ok: false, step: 'branch', msg: `브랜치 '${want}' 가 없습니다. 기본 브랜치는 '${info.default_branch}' 입니다.` });
+          }
+          // 4) 데이터 파일
+          const fr = await api(target.path || 'data/db.json');
+          if (fr.status === 200) return done({ ok: true, step: 'ok', msg: '정상 — 읽기·쓰기 모두 가능합니다.' });
+          if (fr.status === 404) return done({ ok: true, step: 'newfile', msg: '정상 — 데이터 파일이 아직 없어 첫 동기화 때 생성됩니다.' });
+          return done({ ok: false, step: 'file', msg: `데이터 파일 확인 실패 (${fr.status})` });
+        } catch (e) { return done({ ok: false, step: 'network', msg: '네트워크 오류: ' + e.message }); }
+      },
     };
   })();
 
