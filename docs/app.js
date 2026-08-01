@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.9.1';
+const APP_VERSION = '0.9.2';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -796,9 +796,15 @@ function placeSheet(id) {
   const fl = (p.floors || []).map(([f, v]) => `<div class="flrow"><span class="fl">${esc(f)}</span><span>${b(v)}</span></div>`).join('');
   const bullets = (p.info || []).map((t) => `<li${/^⚠/.test(t) ? ' class="warn"' : ''}>${b(t)}</li>`).join('');
   const art = (p.art && Illust.has(p.art)) ? `<div class="plart">${Illust.svg(p.art)}</div>` : '';
+  // 층별 배치 구조도 — 위층이 위로 오는 세로 단면
+  const stack = (p.stack || []).map(([f, t, k]) => `<div class="stfl s-${k || 'room'}">
+      <span class="lv">${esc(f)}</span><span class="wh">${b(t)}</span></div>`).join('');
+  const stackBox = stack ? `<div class="stwrap"><div class="sthead">층별 배치</div><div class="stack">${stack}</div>
+      <div class="stroof"></div></div>` : '';
   sheet(`${art}<div class="plhead ${kd.c}"><span class="kchip">${kd.ko}</span>${p.no ? `<span class="kchip no">가이드맵 ${p.no}</span>` : ''}</div>
     <h3>${esc(p.name)}</h3>
     ${fl ? `<div class="floors">${fl}</div>` : ''}
+    ${stackBox}
     ${bullets ? `<ul class="plinfo">${bullets}</ul>` : ''}
     ${rows ? `<table class="pltab">${rows}</table>` : ''}
     ${p.bld ? `<div class="foot"><button class="btn filled" data-ask style="width:100%">이 동 자료 챗에서 보기</button></div>` : ''}

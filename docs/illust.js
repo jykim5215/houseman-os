@@ -37,22 +37,35 @@ const Illust = (() => {
     <path d="M${x} ${y} L${x - 7 * s} ${y + 15 * s} L${x + 7 * s} ${y + 15 * s} Z" fill="#3d6b42"/>
     <rect x="${x - 1.2 * s}" y="${y + 14 * s}" width="${2.4 * s}" height="${5 * s}" fill="#6b4a2e"/>`).join('');
 
-  /* ── 소노벨 A·B·C — 크림 고층 + 초록 세로 띠 ── */
-  const belle = () => `${bg()}${ridge(70)}
+  /* ── 소노벨 A·B·C ──
+     실사 참고: 크림색 고층 슬래브 2동이 나란히, 정중앙에 진초록 세로 띠 + 옥상 사인.
+     양옆으로 갈색 모임지붕을 얹은 낮은 베이지 동, 앞쪽에 아치 캐노피 상가동, 그 앞이 잔디. */
+  const belle = () => {
+    // 측면 저층동 (베이지 + 갈색 모임지붕, 계단식)
+    const wing = (x, y, w, h) => `
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${C.tan}"/>
+      ${grid(x, y + 5, w, h - 5, Math.round(w / 11), Math.round((h - 5) / 9))}
+      <path d="M${x - 4} ${y} L${x + w * 0.3} ${y - 11} L${x + w * 0.7} ${y - 11} L${x + w + 4} ${y} Z" fill="${C.roof}"/>`;
+    return `${bg()}${ridge(66)}
     <g>
-      <rect x="42" y="52" width="52" height="76" fill="${C.cream2}"/>${grid(42, 58, 52, 68, 5, 9)}
-      <rect x="216" y="56" width="50" height="72" fill="${C.cream2}"/>${grid(216, 62, 50, 64, 5, 8)}
-      <rect x="104" y="34" width="104" height="94" fill="${C.cream}"/>
-      <rect x="104" y="34" width="104" height="5" fill="${C.creamD}"/>
-      ${grid(104, 44, 42, 84, 4, 11)}${grid(166, 44, 42, 84, 4, 11)}
-      <rect x="146" y="34" width="20" height="94" fill="${C.band}"/>
-      <rect x="146" y="34" width="20" height="6" fill="${C.bandD}"/>
-      <rect x="140" y="26" width="32" height="10" rx="2" fill="${C.cream}" stroke="${C.creamD}"/>
-      <rect x="146" y="29" width="20" height="4" rx="1" fill="${C.band}"/>
+      ${wing(14, 78, 62, 44)}${wing(250, 82, 58, 40)}
+      <rect x="80" y="60" width="46" height="62" fill="${C.cream2}"/>${grid(80, 66, 46, 56, 4, 8)}
+      <rect x="204" y="62" width="44" height="60" fill="${C.cream2}"/>${grid(204, 68, 44, 54, 4, 8)}
+      <rect x="126" y="30" width="80" height="92" fill="${C.cream}"/>
+      <rect x="126" y="30" width="80" height="4" fill="${C.creamD}"/>
+      ${grid(126, 40, 30, 82, 3, 12)}${grid(178, 40, 28, 82, 3, 12)}
+      <rect x="156" y="30" width="22" height="92" fill="${C.band}"/>
+      <rect x="156" y="30" width="22" height="5" fill="${C.bandD}"/>
+      <rect x="150" y="20" width="34" height="11" rx="2" fill="${C.cream}" stroke="${C.creamD}" stroke-width="1.4"/>
+      <rect x="157" y="23" width="20" height="5" rx="1" fill="${C.band}"/>
     </g>
-    <rect x="86" y="112" width="148" height="16" rx="3" fill="${C.stone}"/>
-    <rect x="86" y="112" width="148" height="4" fill="${C.stoneD}"/>
-    ${lawn(124)}${trees([26, 292], 104, .8)}`;
+    <g>
+      <rect x="66" y="106" width="188" height="18" fill="${C.stone}"/>
+      ${[74, 106, 138, 170, 202].map((x) => `<path d="M${x} 124 v-9 a11 7 0 0 1 22 0 v9 Z" fill="${C.red}" opacity=".82"/>`).join('')}
+      <rect x="66" y="104" width="188" height="4" fill="${C.stoneD}"/>
+    </g>
+    ${lawn(124)}${trees([8, 312], 108, .8)}`;
+  };
 
   /* ── 소노캄 — 베이지 + 갈색 박공지붕 계단식 ── */
   const calm = () => `${bg()}${ridge(66)}

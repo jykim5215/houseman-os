@@ -409,3 +409,27 @@ h3{letter-spacing:-.02em}
 .plinfo li.warn{color:var(--warn);font-weight:600}
 .plinfo li.warn::marker{color:var(--warn)}
 .plinfo b,.pltab b,.flrow b{font-weight:800;color:var(--text)}
+
+/* 층별 배치 구조도 — 건물 단면처럼 위층이 위로 */
+.stwrap{margin:14px 0 4px}
+.sthead{font-size:11.5px;font-weight:800;color:var(--dim);margin-bottom:7px;letter-spacing:.02em}
+.stroof{height:0;border-left:11px solid transparent;border-right:11px solid transparent;
+  border-bottom:0;margin:0}
+.stack{display:flex;flex-direction:column;border:2px solid var(--line-strong);border-radius:var(--r-md);
+  overflow:hidden;background:var(--surface)}
+.stfl{display:flex;align-items:stretch;gap:0;border-bottom:1.5px solid var(--line);min-height:40px}
+.stfl:last-child{border-bottom:none}
+.stfl .lv{flex:none;width:74px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;
+  background:var(--surface-2);color:var(--text-2);border-right:2px solid var(--line-strong)}
+.stfl .wh{flex:1;display:flex;align-items:center;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--text-2)}
+.stfl.s-room .lv{background:var(--accent-bg);color:var(--accent)}
+.stfl.s-store .lv{background:#e3ecdc;color:#4a7040}
+.stfl.s-linen .lv{background:#dfe9f0;color:#3f6479}
+.stfl.s-pet   .lv{background:#f3e2ea;color:#8d4a68}
+.stfl.s-util  .lv{background:var(--surface-3);color:var(--dim)}
+.stfl.s-warn  .lv{background:var(--warn-bg);color:var(--warn)}
+.stfl.s-warn  .wh{color:var(--warn);font-weight:600}
+[data-theme="dark"] .stfl.s-store .lv{background:#2b3826;color:#a9cf9b}
+[data-theme="dark"] .stfl.s-linen .lv{background:#243440;color:#9dc2d6}
+[data-theme="dark"] .stfl.s-pet .lv{background:#3a2530;color:#e2a8c2}

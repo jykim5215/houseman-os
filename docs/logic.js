@@ -148,10 +148,14 @@ const Logic = (() => {
 
   function searchSources(text) {
     const toks = tokens(text); if (!toks.length) return [];
-    // 동을 미리 고르지 않아도 되도록: 문장에 동이 있으면 그 동으로 좁히고, 없으면 전체에서 찾는다
+    // 동을 미리 고를 필요 없음. 문장에 동이 있으면 그 동을 크게 가산할 뿐, 잘라내지는 않는다.
+    // (하드 필터링하면 '펫 침구류'처럼 다른 동 자료에 답이 있는 질문을 통째로 놓친다)
     const want = bldFromText(text);
-    const enabled = Store.load().sources.filter((s) => s.enabled !== false && (!want || s.bld === want || s.bld === '*'));
-    const hits = enabled.map((s) => ({ s, score: toks.reduce((a, t) => a + (s.content.includes(t) ? 1 : 0) + (s.title.includes(t) ? 0.5 : 0), 0) })).filter((x) => x.score > 0);
+    const bonus = (s) => !want ? 0 : (s.bld === want ? 2 : s.bld === '*' ? 0.5 : -0.5);
+    const enabled = Store.load().sources.filter((s) => s.enabled !== false);
+    const hits = enabled.map((s) => ({ s, score: toks.reduce((a, t) => a + (s.content.includes(t) ? 1 : 0) + (s.title.includes(t) ? 0.5 : 0), 0) }))
+      .filter((x) => x.score > 0)
+      .map((x) => ({ ...x, score: x.score + bonus(x.s) }));
     hits.sort((a, b) => a.s.priority - b.s.priority || b.score - a.score);
     return hits.map((x) => x.s);
   }
