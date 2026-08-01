@@ -176,6 +176,7 @@ const Store = (() => {
     if (!db.config) db.config = { updatedAt: '' };
     if (!db.users) db.users = [];
     if (!db.workers) db.workers = [];
+    ensureFixedUser(db);   // 공용 계정 하나만 유지
     // 예전 버전의 샘플 데이터(가짜 이름·무전기·톡)를 자동 정리하고 실제 자료만 다시 심는다
     // 비파괴 마이그레이션: 실제 근무 데이터는 절대 지우지 않고, 동 목록 갱신 + 누락 참고자료만 추가
     if ((db.seedVersion || 0) < SEED_VERSION) {
@@ -266,14 +267,34 @@ const Store = (() => {
     const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(salt), iterations: iter || ITER, hash: 'SHA-256' }, km, 256);
     return hex(bits);
   }
+  /* 계정은 팀 공용 하나로 고정 (사장님 지시) — 계정 생성/추가 없음.
+     주의: 이 앱은 공개 저장소로 배포되므로 여기 있는 해시는 누구나 볼 수 있다.
+     실제 데이터 접근을 막는 것은 '팀 코드'이고, 이 로그인은 앱 내 편의·오작동 방지용이다. */
+  const FIXED = {
+    id: 'u-houseman', name: 'houseman', role: 'admin',
+    salt: 'hos-fixed-2026', iter: 310000,
+    hash: '49e0e8d23b39b14a60e5b6ac45984d4706c8f1cc029bee18fe8e6771e2583de0',
+    createdAt: '2026-08-01 00:00:00',
+  };
+  function ensureFixedUser(d) {
+    if (!d.users) d.users = [];
+    const i = d.users.findIndex((u) => u.id === FIXED.id || u.name === FIXED.name);
+    if (i < 0) d.users.unshift({ ...FIXED });
+    else d.users[i] = { ...FIXED };          // 항상 고정값으로 되돌린다(동기화로 변형돼도)
+    return d;
+  }
+
   const Auth = {
-    users() { return load().users || []; },
+    FIXED_NAME: FIXED.name,
+    // 공용 계정만 노출 — 예전에 만들어진 계정이 동기화로 돌아와도 보이지 않는다
+    users() { return (load().users || []).filter((u) => u.id === FIXED.id); },
     hasUsers() { return this.users().length > 0; },
     hasAdmin() { return this.users().some((u) => u.role === 'admin'); },
     // 로그인 유지: localStorage (개인 기기 전제, 매번 재로그인 안 함)
     get current() { try { const c = JSON.parse(localStorage.getItem('hos.session') || 'null'); if (!c) return null; const u = this.users().find((x) => x.id === c.id); return u ? { id: u.id, name: u.name, role: u.role } : c; } catch { return null; } },
     isAdmin() { const c = this.current; return !!c && c.role === 'admin'; },
-    async create(name, pw, role) {
+    async create() { throw new Error('계정은 팀 공용 하나로 고정돼 있습니다. 새로 만들 수 없습니다.'); },
+    async _createDisabled(name, pw, role) {
       name = String(name || '').trim();
       if (!name) throw new Error('이름을 입력하세요');
       if (String(pw || '').length < 4) throw new Error('비밀번호는 4자 이상으로 정해주세요');
@@ -392,7 +413,7 @@ const Store = (() => {
         else if (res.status === 403) throw new Error('접근이 거부됐습니다 (403)' + (await ghMsg(res)));
         else throw new Error('서버 응답 ' + res.status + (await ghMsg(res)));
 
-        const merged = remote ? merge(remote, db) : db;
+        const merged = ensureFixedUser(remote ? merge(remote, db) : db);
         if (JSON.stringify(merged) !== JSON.stringify(db)) {
           db = merged; localStorage.setItem(LS_DB, JSON.stringify(db));
           if (onRemoteChange) onRemoteChange();

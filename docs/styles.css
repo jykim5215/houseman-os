@@ -379,7 +379,7 @@ h3{letter-spacing:-.02em}
 #mapSvg .k-move   .top,#mapSvg .k-move   .side,#mapSvg .k-move   .flat{fill:#8d8377}
 #mapSvg .k-nature .top,#mapSvg .k-nature .side,#mapSvg .k-nature .flat{fill:#6faa38}
 #mapSvg .k-nature .flat{opacity:.5}
-#mapSvg .slope{fill:var(--surface-3)}
+#mapSvg .slope{fill:var(--surface-3);stroke:var(--line-strong);stroke-width:1.5}
 #mapSvg .snow{fill:#fffdf7;opacity:.95}
 .mapfilter .k-stay{color:#a9682f} .mapfilter .k-play{color:#2f8f83} .mapfilter .k-food{color:#b8791f}
 .mapfilter .k-conv{color:#4c6fa4} .mapfilter .k-move{color:#7b7166} .mapfilter .k-nature{color:#5a9430}
@@ -433,3 +433,17 @@ h3{letter-spacing:-.02em}
 [data-theme="dark"] .stfl.s-store .lv{background:#2b3826;color:#a9cf9b}
 [data-theme="dark"] .stfl.s-linen .lv{background:#243440;color:#9dc2d6}
 [data-theme="dark"] .stfl.s-pet .lv{background:#3a2530;color:#e2a8c2}
+
+/* 지도 — 부드러운 마감 (v0.9.3) */
+#mapSvg .green{fill:#9dbc73;opacity:.42}
+[data-theme="dark"] #mapSvg .green{fill:#3f5433;opacity:.5}
+#mapSvg .road{stroke:var(--surface);stroke-width:11;fill:none;stroke-linecap:round;opacity:.85}
+#mapSvg .road.main{stroke-width:14}
+#mapSvg .road.thin{stroke-width:7;opacity:.6}
+#mapSvg .pl .shadow{fill:rgba(60,40,18,.16)}
+[data-theme="dark"] #mapSvg .pl .shadow{fill:rgba(0,0,0,.4)}
+#mapSvg .pl .gloss{fill:#fff;opacity:.13;pointer-events:none}
+#mapSvg .pl .top{stroke:rgba(255,255,255,.42);stroke-width:1.4}
+#mapSvg .pl .side{filter:brightness(.68)}
+#mapSvg .pl{transition:opacity .18s ease,transform .16s var(--ease)}
+#mapSvg .pl:active{transform:translateY(-2px)}

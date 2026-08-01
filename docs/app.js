@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.9.2';
+const APP_VERSION = '0.9.3';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -432,38 +432,11 @@ $('#bldBtn').onclick = () => {
 
 /* ── 로그인 / 계정 ── */
 function showLogin() {
-  const users = Store.Auth.users();
-  // 팀 서버에 연결돼 있는데 계정이 안 보이면 '못 불러온 것'이지 '없는 것'이 아니다.
-  // 여기서 계정을 새로 만들게 두면 같은 사람의 계정이 중복 생성된다.
-  if (!users.length && Store.Sync.cfg && Store.Sync.status === 'error') {
-    sheet(`<h3>계정을 불러오지 못했습니다</h3>
-      <p class="meta">팀 서버에 연결돼 있지만 자료를 받지 못했습니다. 여기서 계정을 새로 만들면 중복 계정이 생기므로 막았습니다.</p>
-      <div class="warnbox">${esc(Store.Sync.lastError || '연결 오류')}</div>
-      <div class="foot"><button class="btn filled" data-retry style="width:100%">다시 시도</button></div>`);
-    $('#sheetBody [data-retry]').onclick = async () => { closeSheet(); await Store.Sync.pullPush(); showLogin(); };
-    return;
-  }
-  if (!users.length) {
-    sheet(`<h3>관리자 계정 만들기</h3>
-      <p class="meta">처음 실행입니다. 관리자 계정을 하나 만들어 주세요. 근무자 계정은 이후 설정에서 추가합니다.</p>
-      <label>이름 *</label><input type="text" id="nu" placeholder="예: 김반장" autocomplete="off">
-      <label>비밀번호 * (4자 이상)</label><input type="password" id="np" autocomplete="new-password">
-      <div id="lerr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
-      <div class="foot"><button class="btn filled" data-ok style="width:100%">만들고 시작</button></div>`);
-    $('#sheetBody [data-ok]').onclick = async () => {
-      try {
-        await Store.Auth.create($('#nu').value, $('#np').value, 'admin');
-        await Store.Auth.login($('#nu').value.trim(), $('#np').value);
-        closeSheet(); afterLogin();
-        // 최초 관리자 → 팀 서버가 아직 없으면 바로 설정으로 유도
-        if (!Store.Sync.cfg) { const cfg = await Store.Team.fetch(); if (!cfg) sealSheet(); }
-      } catch (e) { $('#lerr').textContent = e.message; }
-    };
-    return;
-  }
+  // 계정은 팀 공용 하나뿐 — 만들기·선택 없이 비밀번호만
   sheet(`<h3>로그인</h3>
-    <label>이름</label><select id="lu">${users.map((u) => `<option value="${esc(u.name)}">${esc(u.name)}${u.role === 'admin' ? ' (관리자)' : ''}</option>`).join('')}</select>
-    <label>비밀번호</label><input type="password" id="lp" autocomplete="current-password">
+    <p class="meta">팀 공용 계정 하나로 모든 기능을 씁니다.</p>
+    <label>아이디</label><input type="text" id="lu" value="${esc(Store.Auth.FIXED_NAME)}" autocomplete="username" readonly>
+    <label>비밀번호</label><input type="password" id="lp" autocomplete="current-password" placeholder="비밀번호">
     <div id="lerr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
     <div class="foot"><button class="btn filled" data-ok style="width:100%">로그인</button></div>`);
   const go = async () => {
@@ -472,6 +445,7 @@ function showLogin() {
   };
   $('#sheetBody [data-ok]').onclick = go;
   $('#lp').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  setTimeout(() => { const el = $('#lp'); if (el) el.focus(); }, 320);
 }
 function afterLogin() {
   const u = me();
@@ -481,35 +455,11 @@ function afterLogin() {
 $('#workerChip').onclick = () => {
   const u = me();
   if (!u) return showLogin();
-  sheet(`<h3>${esc(u.name)} <span class="meta">${u.role === 'admin' ? '관리자' : '근무자'}</span></h3>
-    ${isAdmin() ? `<label>계정 관리</label><div id="ulist"></div>
-      <button class="btn" data-add style="width:100%;margin-top:8px">＋ 근무자 계정 추가</button>` : '<p class="meta">수정 권한은 관리자 계정에만 있습니다.</p>'}
+  sheet(`<h3>${esc(u.name)} <span class="meta">팀 공용 계정</span></h3>
+    <p class="meta">계정은 하나로 고정돼 있고 모든 기능을 쓸 수 있습니다. 계정 추가·권한 변경은 없습니다.</p>
     <div class="foot"><button class="btn" data-c>닫기</button><button class="btn danger" data-out>로그아웃</button></div>`);
   $('#sheetBody [data-c]').onclick = closeSheet;
   $('#sheetBody [data-out]').onclick = () => { Store.Auth.logout(); closeSheet(); showLogin(); };
-  if (isAdmin()) {
-    const draw = () => {
-      $('#ulist').innerHTML = Store.Auth.users().map((x) => `<div class="qrow"><span class="ql">${esc(x.name)}</span>
-        <span class="meta">${x.role === 'admin' ? '관리자' : '근무자'}</span>
-        ${x.id !== u.id ? `<button class="act" data-role="${x.id}" data-to="${x.role === 'admin' ? 'staff' : 'admin'}">${x.role === 'admin' ? '근무자로' : '관리자로'}</button>
-        <button class="act" data-del="${x.id}" style="border-color:var(--danger-line);color:var(--danger)">삭제</button>` : '<span class="meta">(나)</span>'}</div>`).join('');
-      $$('#ulist [data-role]').forEach((b) => b.onclick = () => { Store.Auth.setRole(b.dataset.role, b.dataset.to); draw(); });
-      $$('#ulist [data-del]').forEach((b) => b.onclick = () => { if (confirm('이 계정을 삭제할까요?')) { Store.Auth.remove(b.dataset.del); draw(); } });
-    };
-    draw();
-    $('#sheetBody [data-add]').onclick = () => {
-      sheet(`<h3>근무자 계정 추가</h3><label>이름 *</label><input type="text" id="au" autocomplete="off">
-        <label>비밀번호 * (4자 이상)</label><input type="password" id="ap" autocomplete="new-password">
-        <div class="checkrow"><input type="checkbox" id="aa"><label for="aa" style="margin:0;font-size:13.5px;color:var(--text)">관리자 권한 부여(수정 가능)</label></div>
-        <div id="aerr" class="meta" style="color:var(--danger);min-height:16px;margin-top:6px"></div>
-        <div class="foot"><button class="btn" data-c>취소</button><button class="btn filled" data-ok>추가</button></div>`);
-      $('#sheetBody [data-c]').onclick = closeSheet;
-      $('#sheetBody [data-ok]').onclick = async () => {
-        try { await Store.Auth.create($('#au').value, $('#ap').value, $('#aa').checked ? 'admin' : 'staff'); closeSheet(); alert('계정이 추가됐습니다.'); }
-        catch (e) { $('#aerr').textContent = e.message; }
-      };
-    };
-  }
 };
 
 /* ── 설정 ── */
@@ -712,8 +662,10 @@ function mapSvg() {
       <rect class="flat" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="14"/>
       <text class="nm" x="${cx}" y="${p.y + p.h / 2 + 6}">${esc2(label)}</text></g>`;
     return `<g class="pl ${k}${p.big ? ' big' : ''}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
-      <rect class="side" x="${p.x}" y="${p.y + 7}" width="${p.w}" height="${p.h + lv}" rx="11"/>
-      <rect class="top" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="11"/>
+      <ellipse class="shadow" cx="${cx + 4}" cy="${p.y + p.h + lv + 8}" rx="${p.w * 0.54}" ry="7"/>
+      <rect class="side" x="${p.x}" y="${p.y + 7}" width="${p.w}" height="${p.h + lv}" rx="9"/>
+      <rect class="top" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="9"/>
+      <rect class="gloss" x="${p.x + 3}" y="${p.y + 3}" width="${p.w - 6}" height="${Math.max(4, p.h * 0.16)}" rx="4"/>
       ${p.no ? `<circle class="no" cx="${p.x + p.w - 11}" cy="${p.y + 11}" r="9"/><text class="not" x="${p.x + p.w - 11}" y="${p.y + 15}">${p.no}</text>` : ''}
       ${p.bld ? `<text class="bd" x="${p.x + 12}" y="${p.y + p.h / 2 + 5}">${esc2(p.bld)}</text>` : ''}
       <text class="nm" x="${cx}" y="${p.y + p.h + lv + 26}">${esc2(label)}</text></g>`;
@@ -721,9 +673,16 @@ function mapSvg() {
   const order = (p) => (p.shape ? 0 : 1);
   const list = D.places.slice().sort((a, b) => order(a) - order(b) || (a.y + (a.h || 0)) - (b.y + (b.h || 0)));
   return `<svg id="mapSvg" viewBox="0 0 ${D.W} ${D.H}" preserveAspectRatio="xMidYMid meet">
-    <rect class="ground" x="0" y="0" width="${D.W}" height="${D.H}"/>
-    <path class="road" d="M40 344 C 240 330 420 348 700 336 C 800 330 860 320 900 300"/>
-    <path class="road" d="M300 470 C 420 452 560 452 690 470"/>
+    <defs>
+      <linearGradient id="mgGround" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="var(--surface-3)"/><stop offset="1" stop-color="var(--bg)"/>
+      </linearGradient>
+    </defs>
+    <rect class="ground" x="0" y="0" width="${D.W}" height="${D.H}" fill="url(#mgGround)"/>
+    <path class="green" d="M0 300 Q 260 258 520 300 T 1100 292 L1100 ${D.H} L0 ${D.H} Z"/>
+    <path class="road main" d="M30 372 C 260 344 520 380 780 350 C 900 336 1000 330 1080 318"/>
+    <path class="road" d="M300 560 C 460 528 660 534 860 566"/>
+    <path class="road thin" d="M470 372 L 500 604"/>
     ${list.map(block).join('')}
   </svg>`;
 }
@@ -836,11 +795,8 @@ $('#updGo').onclick = async () => { if ('serviceWorker' in navigator) { const rs
   const u = me();
   if (Store.Sync.cfg) { // 이미 연결됨
     if (u) { $('#workerChip').textContent = u.name + (u.role === 'admin' ? ' ·관리' : ''); briefingCard(); }
-    else {
-      // 첫 동기화 전에 로그인 화면을 띄우면 계정 목록이 비어 보여 중복 계정이 생긴다 → 서버를 먼저 기다린다
-      $('#workerChip').textContent = '불러오는 중';
-      Store.Sync.ready().then(() => { $('#workerChip').textContent = '로그인'; showLogin(); });
-    }
+    // 계정이 공용 하나로 고정이라 동기화를 기다릴 필요가 없다 (중복 생성 위험 없음)
+    else { $('#workerChip').textContent = '로그인'; showLogin(); }
     return;
   }
   // 미연결: team.json 있으면 팀 코드로 연결, 없으면 로그인(로컬/최초 관리자)
