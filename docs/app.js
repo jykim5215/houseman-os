@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.8.0';
+const APP_VERSION = '0.9.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -144,7 +144,7 @@ async function send(text) {
   if (!AI.enabled()) return aiMsg('', `잘 이해하지 못했어요. ${HELP}<div class="meta" style="margin-top:6px">설정 ⚙에서 AI를 연결하면 자유로운 문장도 이해합니다.</div>`);
   const thinking = aiMsg('', thinkingDots);
   try {
-    const r = await AI.ask(text, Logic.snapshot());
+    const r = await AI.ask(text, Logic.snapshot(text));
     thinking.remove();
     if (r.kind === 'propose' && Array.isArray(r.changes) && r.changes.length) {
       return void needAdmin(() => renderProposal({ summary: r.summary || '변경 제안', changes: r.changes.map((c) => ({ ...c, reason: r.reason || text })) }));
@@ -433,6 +433,16 @@ $('#bldBtn').onclick = () => {
 /* ── 로그인 / 계정 ── */
 function showLogin() {
   const users = Store.Auth.users();
+  // 팀 서버에 연결돼 있는데 계정이 안 보이면 '못 불러온 것'이지 '없는 것'이 아니다.
+  // 여기서 계정을 새로 만들게 두면 같은 사람의 계정이 중복 생성된다.
+  if (!users.length && Store.Sync.cfg && Store.Sync.status === 'error') {
+    sheet(`<h3>계정을 불러오지 못했습니다</h3>
+      <p class="meta">팀 서버에 연결돼 있지만 자료를 받지 못했습니다. 여기서 계정을 새로 만들면 중복 계정이 생기므로 막았습니다.</p>
+      <div class="warnbox">${esc(Store.Sync.lastError || '연결 오류')}</div>
+      <div class="foot"><button class="btn filled" data-retry style="width:100%">다시 시도</button></div>`);
+    $('#sheetBody [data-retry]').onclick = async () => { closeSheet(); await Store.Sync.pullPush(); showLogin(); };
+    return;
+  }
   if (!users.length) {
     sheet(`<h3>관리자 계정 만들기</h3>
       <p class="meta">처음 실행입니다. 관리자 계정을 하나 만들어 주세요. 근무자 계정은 이후 설정에서 추가합니다.</p>
@@ -503,7 +513,7 @@ $('#workerChip').onclick = () => {
 };
 
 /* ── 설정 ── */
-function toggleTheme() { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? '' : 'dark'; localStorage.setItem('hos.theme', r.dataset.theme); document.querySelector('meta[name=theme-color]').content = r.dataset.theme === 'dark' ? '#1b1714' : '#faf7f2'; }
+function toggleTheme() { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? '' : 'dark'; localStorage.setItem('hos.theme', r.dataset.theme); document.querySelector('meta[name=theme-color]').content = r.dataset.theme === 'dark' ? '#1a1410' : '#f7f1e5'; }
 $('#gearBtn').onclick = () => {
   const connected = !!Store.Sync.cfg, admin = isAdmin(), st = Store.Sync.status;
   const stLabel = connected ? ({ synced: '연결됨 ✓', syncing: '동기화 중…', error: '오류', idle: '연결됨' }[st] || '연결됨') : '미연결';
@@ -643,8 +653,10 @@ function aiSheet() {
   };
   $('#sheetBody [data-ok]').onclick = () => {
     const v = read(); if (!v.key) return alert('API 키를 입력하세요');
-    AI.configure(v);
-    if (isAdmin()) { const share = $('#aishare'); if (share) Store.setSharedAI(share.checked ? v : null); }
+    const share = isAdmin() ? $('#aishare') : null;
+    const shared = !!(share && share.checked);
+    AI.configure({ ...v, own: !shared });   // 팀 공유가 아니면 '이 기기 전용' 표시 → 공유 키가 덮어쓰지 않음
+    if (isAdmin()) Store.setSharedAI(shared ? v : null);
     closeSheet();
   };
 }
@@ -672,11 +684,131 @@ function refreshHead() {
   const st = Store.Sync.status, stKo = { local: '로컬', idle: '대기', syncing: '동기화 중', synced: '연결됨', error: '오류' }[st] || st;
   const sb = $('#syncBtn'); sb.classList.toggle('spin', st === 'syncing'); sb.classList.toggle('err', st === 'error'); sb.classList.toggle('okc', st === 'synced');
 }
-function applySharedAI() { const s = Store.getSharedAI(); if (s && s.key && !AI.enabled()) AI.configure(s); }
+/* 팀 공유 AI 키를 이 기기에 계속 붙여 둔다.
+   예전엔 '키가 없을 때만' 적용해서, 로컬 키가 한 번 비거나 어긋나면 다시 안 붙었다(키가 자꾸 빠지는 증상). */
+function applySharedAI() {
+  const s = Store.getSharedAI(); if (!s || !s.key) return;
+  const c = AI.cfg;
+  if (c && c.own) return;                                        // 이 기기에서 직접 넣은 키는 그대로 존중
+  if (c && c.key === s.key && c.provider === s.provider) return;  // 이미 같은 키
+  AI.configure({ ...s, own: false });
+}
 function refreshAll() { applySharedAI(); renderCounters(); if ($('#tab-data').classList.contains('on')) renderData(); if ($('#tab-talk').classList.contains('on')) renderFeed(); renderQuick(); refreshHead(); }
 
 /* ── 탭 ── */
-function go(t) { state.tab = t; $$('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabview').forEach((v) => v.classList.toggle('on', v.id === 'tab-' + t)); if (t === 'data') renderData(); if (t === 'talk') renderFeed(); }
+/* ── 지도 ── */
+const mapState = { kind: 'all', k: 1.9, tx: 0, ty: 0, built: false, sel: null };
+function mapSvg() {
+  const D = MapData, esc2 = esc;
+  const block = (p) => {
+    const lv = p.lv || 0, k = MapData.KINDS[p.kind].c;
+    const cx = p.x + p.w / 2;
+    const label = p.short || p.name;
+    if (p.shape === 'slope') return `<g class="pl ${k}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
+      <path class="slope" d="M${p.x} ${p.y + p.h} L${cx} ${p.y} L${p.x + p.w} ${p.y + p.h} Z"/>
+      <path class="snow" d="M${cx - 46} ${p.y + 40} L${cx} ${p.y + 6} L${cx + 46} ${p.y + 40} Z"/>
+      <text class="nm" x="${cx}" y="${p.y + p.h - 16}">${esc2(label)}</text></g>`;
+    if (p.shape === 'flat') return `<g class="pl ${k}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
+      <rect class="flat" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="14"/>
+      <text class="nm" x="${cx}" y="${p.y + p.h / 2 + 6}">${esc2(label)}</text></g>`;
+    return `<g class="pl ${k}${p.big ? ' big' : ''}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
+      <rect class="side" x="${p.x}" y="${p.y + 7}" width="${p.w}" height="${p.h + lv}" rx="11"/>
+      <rect class="top" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="11"/>
+      ${p.no ? `<circle class="no" cx="${p.x + p.w - 11}" cy="${p.y + 11}" r="9"/><text class="not" x="${p.x + p.w - 11}" y="${p.y + 15}">${p.no}</text>` : ''}
+      ${p.bld ? `<text class="bd" x="${p.x + 12}" y="${p.y + p.h / 2 + 5}">${esc2(p.bld)}</text>` : ''}
+      <text class="nm" x="${cx}" y="${p.y + p.h + lv + 26}">${esc2(label)}</text></g>`;
+  };
+  const order = (p) => (p.shape ? 0 : 1);
+  const list = D.places.slice().sort((a, b) => order(a) - order(b) || (a.y + (a.h || 0)) - (b.y + (b.h || 0)));
+  return `<svg id="mapSvg" viewBox="0 0 ${D.W} ${D.H}" preserveAspectRatio="xMidYMid meet">
+    <rect class="ground" x="0" y="0" width="${D.W}" height="${D.H}"/>
+    <path class="road" d="M40 344 C 240 330 420 348 700 336 C 800 330 860 320 900 300"/>
+    <path class="road" d="M300 470 C 420 452 560 452 690 470"/>
+    ${list.map(block).join('')}
+  </svg>`;
+}
+function renderMap() {
+  const stage = $('#mapStage');
+  if (!mapState.built) {
+    const ks = MapData.KINDS;
+    $('#mapFilter').innerHTML = `<button data-k="all" class="on">전체</button>` +
+      Object.keys(ks).map((k) => `<button data-k="${k}" class="${ks[k].c}">${ks[k].ko}</button>`).join('');
+    $$('#mapFilter button').forEach((b) => b.onclick = () => {
+      mapState.kind = b.dataset.k;
+      $$('#mapFilter button').forEach((x) => x.classList.toggle('on', x === b));
+      applyMapFilter();
+    });
+    stage.innerHTML = `<div class="mapzoomer" id="mapZoomer">${mapSvg()}</div>
+      <div class="mapzoom"><button data-z="in" aria-label="확대">＋</button><button data-z="out" aria-label="축소">－</button><button data-z="fit">전체</button></div>`;
+    $$('#mapStage .mapzoom button').forEach((b) => b.onclick = () => {
+      if (b.dataset.z === 'fit') { mapState.k = 1; mapState.tx = 0; mapState.ty = 0; }
+      else { const n = mapState.k * (b.dataset.z === 'in' ? 1.3 : 1 / 1.3); mapState.k = Math.min(5, Math.max(0.8, n)); }
+      applyMapTx();
+    });
+    $$('#mapStage .pl').forEach((g) => {
+      const open = () => placeSheet(g.dataset.id);
+      g.addEventListener('click', open);
+      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+    bindMapGestures();
+    mapState.built = true;
+  }
+  applyMapTx(); applyMapFilter();
+}
+function applyMapTx() { const z = $('#mapZoomer'); if (z) z.style.transform = `translate(${mapState.tx}px,${mapState.ty}px) scale(${mapState.k})`; }
+function applyMapFilter() {
+  $$('#mapStage .pl').forEach((g) => {
+    const p = MapData.places.find((x) => x.id === g.dataset.id);
+    g.classList.toggle('dim', mapState.kind !== 'all' && p.kind !== mapState.kind);
+  });
+}
+function bindMapGestures() {
+  const st = $('#mapStage'); let pts = new Map(), base = null;
+  const dist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
+  const mid = () => { const a = [...pts.values()]; return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2 }; };
+  st.addEventListener('pointerdown', (e) => {
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) base = { x: e.clientX, y: e.clientY, tx: mapState.tx, ty: mapState.ty, moved: false };
+    if (pts.size === 2) base = { d: dist(), k: mapState.k, m: mid(), tx: mapState.tx, ty: mapState.ty };
+  });
+  st.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1 && base && base.tx !== undefined && base.d === undefined) {
+      const dx = e.clientX - base.x, dy = e.clientY - base.y;
+      if (Math.abs(dx) + Math.abs(dy) > 6) base.moved = true;
+      mapState.tx = base.tx + dx; mapState.ty = base.ty + dy; applyMapTx();
+    } else if (pts.size === 2 && base && base.d) {
+      mapState.k = Math.min(5, Math.max(0.8, base.k * (dist() / base.d))); applyMapTx();
+    }
+  });
+  const up = (e) => { pts.delete(e.pointerId); if (!pts.size) base = null; };
+  st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+  // 드래그 직후의 클릭은 무시 (지도를 밀다가 시설이 열리는 것 방지)
+  st.addEventListener('click', (e) => { if (base && base.moved) { e.stopPropagation(); e.preventDefault(); } }, true);
+  st.addEventListener('wheel', (e) => { e.preventDefault(); mapState.k = Math.min(5, Math.max(0.8, mapState.k * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); applyMapTx(); }, { passive: false });
+}
+function placeSheet(id) {
+  const p = MapData.places.find((x) => x.id === id); if (!p) return;
+  const kd = MapData.KINDS[p.kind];
+  const rows = (p.items || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
+  const fl = (p.floors || []).map(([f, v]) => `<div class="flrow"><span class="fl">${esc(f)}</span><span>${esc(v)}</span></div>`).join('');
+  const bullets = (p.info || []).map((t) => `<li>${esc(t)}</li>`).join('');
+  sheet(`<div class="plhead ${kd.c}"><span class="kchip">${kd.ko}</span>${p.no ? `<span class="kchip no">가이드맵 ${p.no}</span>` : ''}</div>
+    <h3>${esc(p.name)}</h3>
+    ${fl ? `<div class="floors">${fl}</div>` : ''}
+    ${bullets ? `<ul class="plinfo">${bullets}</ul>` : ''}
+    ${rows ? `<table class="pltab">${rows}</table>` : ''}
+    ${p.bld ? `<div class="foot"><button class="btn filled" data-ask style="width:100%">이 동 자료 챗에서 보기</button></div>` : ''}
+    <p class="meta" style="margin-top:10px">출처: 소노 공식홈 시설·식음 안내 및 공식 가이드맵 범례 (2026-08-01 수집). 운영시간·요금은 변동이 크니 확정 안내는 프런트·1588-4888로 확인하세요.</p>`);
+  const ab = $('#sheetBody [data-ask]');
+  if (ab) ab.onclick = () => { closeSheet(); go('chat'); send(`${p.name} 안내`); };
+}
+
+function go(t) { state.tab = t; $$('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabview').forEach((v) => v.classList.toggle('on', v.id === 'tab-' + t));   // 챗·지도는 동에 매이지 않는다 → 동 선택 버튼을 감춰 혼란을 없앤다
+  const free = (t === 'chat' || t === 'map');
+  $('#bldBtn').classList.toggle('hide', free); $('#appTitle').classList.toggle('hide', !free);
+  if (t === 'data') renderData(); if (t === 'talk') renderFeed(); if (t === 'map') renderMap(); }
 $$('nav button').forEach((b) => b.onclick = () => go(b.dataset.tab));
 $$('#seg button').forEach((b) => b.onclick = () => { state.seg = b.dataset.c; state.q = ''; renderData(); });
 
@@ -688,14 +820,19 @@ $('#updGo').onclick = async () => { if ('serviceWorker' in navigator) { const rs
 
 /* ── 시작: 연결(팀 코드) → 로그인 → 앱 ── */
 (function boot() {
-  const th = localStorage.getItem('hos.theme'); if (th) { document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]').content = th === 'dark' ? '#1b1714' : '#faf7f2'; }
+  const th = localStorage.getItem('hos.theme'); if (th) { document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]').content = th === 'dark' ? '#1a1410' : '#f7f1e5'; }
   Store.load(); renderBld();
   setMode('ask'); renderCounters(); renderQuick(); refreshHead();
+  $('#bldBtn').classList.add('hide'); $('#appTitle').classList.remove('hide'); // 시작 탭이 챗
   Store.Sync.onStatus(() => refreshHead()); Store.Sync.onChange(() => refreshAll()); Store.Sync.start();
   const u = me();
   if (Store.Sync.cfg) { // 이미 연결됨
     if (u) { $('#workerChip').textContent = u.name + (u.role === 'admin' ? ' ·관리' : ''); briefingCard(); }
-    else { $('#workerChip').textContent = '로그인'; showLogin(); }
+    else {
+      // 첫 동기화 전에 로그인 화면을 띄우면 계정 목록이 비어 보여 중복 계정이 생긴다 → 서버를 먼저 기다린다
+      $('#workerChip').textContent = '불러오는 중';
+      Store.Sync.ready().then(() => { $('#workerChip').textContent = '로그인'; showLogin(); });
+    }
     return;
   }
   // 미연결: team.json 있으면 팀 코드로 연결, 없으면 로그인(로컬/최초 관리자)

@@ -31,7 +31,7 @@ const Store = (() => {
     const db = {
       rev: 1, seedVersion: SEED_VERSION, updatedAt: now(),
       buildings: BUILDINGS.map((b) => ({ ...b })),
-      config: { updatedAt: now() },
+      config: { updatedAt: '' },
       users: [], workers: [],
       stock: [], equipment: [], lost: [], defects: [], quickref: [], sources: [], messages: [], files: [], audit: [],
     };
@@ -143,7 +143,8 @@ const Store = (() => {
     // 마이그레이션
     if (!db.messages) db.messages = [];
     if (!db.files) db.files = [];
-    if (!db.config) db.config = { updatedAt: now() };
+    // updatedAt을 비워 둔다 — 빈 config가 '최신'으로 이겨서 팀 공유 AI 키를 지우던 문제 방지
+    if (!db.config) db.config = { updatedAt: '' };
     if (!db.users) db.users = [];
     if (!db.workers) db.workers = [];
     // 예전 버전의 샘플 데이터(가짜 이름·무전기·톡)를 자동 정리하고 실제 자료만 다시 심는다
@@ -258,15 +259,23 @@ const Store = (() => {
       return u;
     },
     async login(name, pw) {
-      const u = this.users().find((x) => x.name === String(name || '').trim());
-      if (!u) throw new Error('없는 계정입니다');
-      if ((await derive(pw, u.salt, u.iter || 150000)) !== u.hash) throw new Error('비밀번호가 올바르지 않습니다');
+      const nm = String(name || '').trim();
+      // 같은 이름이 여러 개일 수 있다(예전 버전에서 동기화 전에 계정이 중복 생성됨).
+      // 이름만 보고 첫 번째를 고르면 비밀번호가 어긋나므로, 이름이 같은 계정을 전부 시도한다.
+      const cands = this.users().filter((x) => x.name === nm);
+      if (!cands.length) throw new Error('없는 계정입니다');
+      let u = null;
+      for (const c of cands) { if ((await derive(pw, c.salt, c.iter || 150000)) === c.hash) { u = c; break; } }
+      if (!u) throw new Error('비밀번호가 올바르지 않습니다');
       // 구버전 반복 수 자동 상향(로그인 성공 시 재해시)
       if ((u.iter || 150000) < ITER) { u.iter = ITER; u.hash = await derive(pw, u.salt, ITER); persist(); Sync.schedule(); }
+      // 중복 계정 자동 정리 — 인증에 성공한 계정만 남긴다
+      if (cands.length > 1) { db.users = this.users().filter((x) => x.name !== nm || x.id === u.id); persist(); Sync.schedule(); }
       localStorage.setItem('hos.session', JSON.stringify({ id: u.id, name: u.name, role: u.role }));
       localStorage.setItem(LS_WORKER, u.name);
       return u;
     },
+    dupes() { const c = {}; this.users().forEach((u) => { c[u.name] = (c[u.name] || 0) + 1; }); return Object.keys(c).filter((n) => c[n] > 1); },
     async setPassword(id, pw) {
       const u = this.users().find((x) => x.id === id); if (!u) throw new Error('계정 없음');
       if (String(pw || '').length < 4) throw new Error('비밀번호는 4자 이상');
@@ -291,6 +300,11 @@ const Store = (() => {
     try { cfg = JSON.parse(localStorage.getItem(LS_CFG)); } catch { cfg = null; }
     let status = cfg ? 'idle' : 'local';
     let lastSha = null, timer = null, listeners = [], onRemoteChange = null, lastError = null;
+    // 첫 동기화가 끝나기 전에 로그인 화면을 띄우면 "계정 없음"으로 보여 중복 계정이 생긴다.
+    // 그래서 첫 왕복이 끝날 때(성공·실패 무관) 풀리는 약속을 둔다.
+    let firstResolve = null;
+    const firstDone = new Promise((r) => { firstResolve = r; });
+    const settleFirst = () => { if (firstResolve) { firstResolve(); firstResolve = null; } };
     const setStatus = (s, d) => { status = s; if (s === 'error') lastError = d; if (s === 'synced') lastError = null; listeners.forEach((f) => f(s, d)); };
     const api = (path, init) => fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}` + (init && init.method ? '' : `?ref=${cfg.branch || 'main'}&t=${Date.now()}`), {
       ...init, headers: { 'Authorization': 'Bearer ' + cfg.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(init && init.headers) },
@@ -314,8 +328,12 @@ const Store = (() => {
       const um = new Map();
       [...(remote.users || []), ...(local.users || [])].forEach((u) => { const ex = um.get(u.id); if (!ex || String(u.createdAt || '') >= String(ex.createdAt || '')) um.set(u.id, u); });
       out.users = Array.from(um.values());
+      // config는 통째로 갈아끼우지 않는다 — 최신이 이기되, 최신에 없는 필드(예: aiShared)는 보존.
+      // (예전 버그: 빈 config가 최신 타임스탬프로 올라와 팀 공유 AI 키를 지웠음)
       const rc = remote.config || {}, lc = local.config || {};
-      out.config = (String(rc.updatedAt || '') >= String(lc.updatedAt || '')) ? rc : lc;
+      const newer = (String(lc.updatedAt || '') > String(rc.updatedAt || '')) ? lc : rc;
+      const older = (newer === lc) ? rc : lc;
+      out.config = { ...older, ...newer };
       return out;
     }
     const norm = (d) => JSON.stringify({ ...d, rev: 0, updatedAt: 0 });
@@ -364,12 +382,15 @@ const Store = (() => {
         }
         setStatus('synced');
       } catch (e) { setStatus('error', e.message); }
+      finally { settleFirst(); }
     }
     function schedule(ms) { clearTimeout(timer); timer = setTimeout(pullPush, ms || 2500); }
     return {
       get cfg() { return cfg; }, get status() { return status; }, get lastError() { return lastError; },
       configure(c) { cfg = c; if (c) localStorage.setItem(LS_CFG, JSON.stringify(c)); else { localStorage.removeItem(LS_CFG); setStatus('local'); } if (c) schedule(10); },
       schedule, pullPush,
+      // 첫 동기화 완료까지 기다린다(미연결이면 즉시). 8초 넘으면 그냥 진행.
+      ready() { return cfg ? Promise.race([firstDone, new Promise((r) => setTimeout(r, 8000))]) : Promise.resolve(); },
       onStatus(f) { listeners.push(f); }, onChange(f) { onRemoteChange = f; },
       start() { if (cfg) schedule(100); setInterval(() => { if (cfg && document.visibilityState === 'visible') pullPush(); }, 20000); document.addEventListener('visibilitychange', () => { if (cfg && document.visibilityState === 'visible') schedule(300); }); },
       // 저장소 접근 + 쓰기 권한까지 확인 (404를 무조건 통과시키던 버그 수정)

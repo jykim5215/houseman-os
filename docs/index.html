@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#faf7f2">
+<meta name="theme-color" content="#f7f1e5">
 <title>하우스맨 노트</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="manifest" href="manifest.webmanifest">
@@ -13,13 +13,17 @@
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#2f8f83"/><stop offset="1" stop-color="#c9863f"/>
+  <!-- 자체 제작 마크 — 비발디파크 상징(산 봉우리 + 초록→라임 그라데이션)에서 색과 형태만 빌려
+       갈색·베이지 톤으로 새로 그렸습니다. 공식 워드마크·로고 이미지는 쓰지 않습니다. -->
+  <linearGradient id="lg" x1="0" y1="1" x2="1" y2="0">
+    <stop offset="0" stop-color="#4e9c3f"/><stop offset=".55" stop-color="#8fc63d"/><stop offset="1" stop-color="#d9e04a"/>
   </linearGradient>
   <symbol id="logo" viewBox="0 0 48 48">
-    <rect x="2" y="2" width="44" height="44" rx="13" fill="url(#lg)"/>
-    <path d="M9 31 L18 18 L23 25 L28 15 L39 31 Z" fill="#fff" fill-opacity=".95"/>
-    <path d="M8 34c4 0 4-2.4 8-2.4S20 34 24 34s4-2.4 8-2.4 4 2.4 8 2.4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-opacity=".9"/>
+    <rect x="1.5" y="1.5" width="45" height="45" rx="14" fill="#7a4a22"/>
+    <path d="M24 11 L38 34 H10 Z" fill="url(#lg)"/>
+    <path d="M24 11 L31 22.5 L24 27 L17 22.5 Z" fill="#fffdf6" fill-opacity=".82"/>
+    <path d="M8 39.5c4.2 0 4.2-2.6 8.4-2.6s4.2 2.6 8.4 2.6 4.2-2.6 8.4-2.6 4.2 2.6 6.8 2.6"
+      stroke="#f0dcc0" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-opacity=".85"/>
   </symbol>
   <symbol id="i-talk" viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v5A2.5 2.5 0 0 1 17.5 14H9l-4 3.5V6.5z"/><path d="M8.5 9h7M8.5 11.5h4"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M12 3.5l1.7 4.3 4.3 1.7-4.3 1.7L12 15.5l-1.7-4.3L6 9.5l4.3-1.7zM18.5 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></symbol>
@@ -47,6 +51,7 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
   <symbol id="i-radio" viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="14.5" rx="2.5"/><path d="M12 6V3M9.8 10h4.4"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8.5" cy="9" r="4.5"/><path d="M11.8 12.3 20 20.5M16.5 17l2-2"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4.5 3.5 6.8v13l5.5-2.3 6 2.3 5.5-2.3v-13L15 6.8z M9 4.5v13M15 6.8v13"/></symbol>
   <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.5 6.5a4.5 4.5 0 0 0-6 6L4 17l3 3 4.5-4.5a4.5 4.5 0 0 0 6-6L14 13l-2.5-2.5z"/></symbol>
 </defs></svg>
 
@@ -55,6 +60,7 @@
 <header>
   <svg class="brand" viewBox="0 0 48 48"><use href="#logo"/></svg>
   <button class="bldpick" id="bldBtn"><span id="bldName">오크동</span><svg class="ic sm"><use href="#i-chev"/></svg></button>
+  <span class="apptitle hide" id="appTitle">하우스맨 노트</span>
   <div class="grow"></div>
   <button class="iconbtn" id="syncBtn" title="동기화"><svg class="ic"><use href="#i-sync"/></svg></button>
   <button class="iconbtn" id="gearBtn" title="설정"><svg class="ic"><use href="#i-gear"/></svg></button>
@@ -122,6 +128,15 @@
   </div>
 
   <!-- 스튜디오 -->
+  <!-- 지도 -->
+  <div class="tabview" id="tab-map">
+    <div class="mapwrap">
+      <div class="mapfilter" id="mapFilter"></div>
+      <div class="mapstage" id="mapStage"></div>
+      <div class="mapnote">시설 위치를 알아보기 쉽게 단순화한 개념도입니다. 정확한 축척·평면도가 아닙니다.</div>
+    </div>
+  </div>
+
   <div class="tabview" id="tab-studio">
     <div class="studio">
       <div class="scard" id="scQuick">
@@ -159,6 +174,7 @@
 <nav>
   <button data-tab="talk"><span class="box"><svg class="ic"><use href="#i-talk"/></svg></span>톡</button>
   <button class="on" data-tab="chat"><span class="box"><svg class="ic"><use href="#i-chat"/></svg></span>챗</button>
+  <button data-tab="map"><span class="box"><svg class="ic"><use href="#i-map"/></svg></span>지도</button>
   <button data-tab="data"><span class="box"><svg class="ic"><use href="#i-data"/></svg></span>데이터</button>
   <button data-tab="studio"><span class="box"><svg class="ic"><use href="#i-studio"/></svg></span>스튜디오</button>
 </nav>
@@ -168,6 +184,7 @@
 
 <script src="store.js"></script>
 <script src="logic.js"></script>
+<script src="mapdata.js"></script>
 <script src="ai.js"></script>
 <script src="app.js"></script>
 </body>

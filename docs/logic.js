@@ -11,9 +11,15 @@ const Logic = (() => {
   const STAGES = ['reported', 'first_check', 'second_action', 'transferred', 'done'];
   const STAGE_KO = { reported: '접수', first_check: '1차 확인', second_action: '2차 조치', transferred: '시설팀 이관', done: '완료' };
 
-  function statusBoard() {
-    const stock = Store.inBld('stock'), equipment = Store.inBld('equipment'),
-      lost = Store.inBld('lost'), defects = Store.inBld('defects');
+  /* scope: null이면 현재 선택 동, '*'이면 전체 동(챗 기본 — 동을 미리 고를 필요 없게) */
+  function rows(coll, scope) {
+    if (!scope) return Store.inBld(coll);
+    const all = Store.load()[coll] || [];
+    return (scope === '*' ? all : all.filter((r) => r.bld === scope)).map((r) => ({ ...r, _b: r.bld }));
+  }
+  function statusBoard(scope) {
+    const stock = rows('stock', scope), equipment = rows('equipment', scope),
+      lost = rows('lost', scope), defects = rows('defects', scope);
     const shortage = stock.filter((s) => tracked(s) && s.qty < s.min);
     const overdue = equipment.filter((e) => e.borrower && e.dueAt && e.dueAt < now());
     const broken = equipment.filter((e) => e.condition !== 'ok' || e.battery === 'bad');
@@ -128,21 +134,40 @@ const Logic = (() => {
     }
     return cut(frags[0] || String(content));
   }
+  /* 문장에서 동을 알아낸다 — 못 찾으면 null (동을 미리 고를 필요 없게 하기 위한 핵심) */
+  function bldFromText(text) {
+    const t = String(text || '');
+    const alias = {
+      A: ['체리동', '체리', 'A동', 'a동'], B: ['오크동', '오크', 'B동', 'b동'], C: ['파인동', '파인', 'C동', 'c동'],
+      '캄': ['소노캄', '캄동', '캄'], D: ['메이플동', '메이플', '호텔', 'D동', 'd동'], E: ['노블리안', '소노펫', '펫동', '펫', 'E동', 'e동'],
+    };
+    for (const id of Object.keys(alias)) if (alias[id].some((a) => t.includes(a))) return id;
+    return null;
+  }
+  function bldLabel(id) { const b = Store.buildings().find((x) => x.id === id); return b ? `${b.name}(${b.id})` : id; }
+
   function searchSources(text) {
     const toks = tokens(text); if (!toks.length) return [];
-    const bld = Store.bld;
-    const enabled = Store.load().sources.filter((s) => (s.bld === bld || s.bld === '*') && s.enabled !== false);
+    // 동을 미리 고르지 않아도 되도록: 문장에 동이 있으면 그 동으로 좁히고, 없으면 전체에서 찾는다
+    const want = bldFromText(text);
+    const enabled = Store.load().sources.filter((s) => s.enabled !== false && (!want || s.bld === want || s.bld === '*'));
     const hits = enabled.map((s) => ({ s, score: toks.reduce((a, t) => a + (s.content.includes(t) ? 1 : 0) + (s.title.includes(t) ? 0.5 : 0), 0) })).filter((x) => x.score > 0);
     hits.sort((a, b) => a.s.priority - b.s.priority || b.score - a.score);
     return hits.map((x) => x.s);
   }
 
   function answer(text) {
-    const b = statusBoard();
-    if (/부족|모자/.test(text)) return { kind: 'answer', refused: false, internalText: b.shortage.length ? `부족 재고 ${b.shortage.length}건: ` + b.shortage.map((s) => `${s.item}(${s.location}) ${s.qty}/${s.min}`).join(', ') : '최소 기준을 정한 품목 중 부족한 것은 없습니다. (수건 등 정량 없는 품목은 부족 판정 대상이 아닙니다)', sources: [{ type: 'db', title: '재고 집계', meta: '실시간' }] };
-    if (/미반납|안.*반납/.test(text)) return { kind: 'answer', refused: false, internalText: b.overdue.length ? '미반납 ' + b.overdue.map((e) => `${e.label}(${e.borrower})`).join(', ') : '미반납 장비가 없습니다.', sources: [{ type: 'db', title: '장비 집계', meta: '실시간' }] };
-    if (/습득물|분실물/.test(text)) return { kind: 'answer', refused: false, internalText: `보관중 ${b.lostStored.length}건` + (b.lostUrgent.length ? `, 긴급 ${b.lostUrgent.length}건: ` + b.lostUrgent.map((l) => `${l.desc}(${l.room || l.place})`).join(', ') : ''), sources: [{ type: 'db', title: '습득물 집계', meta: '실시간' }] };
-    if (/하자|시설/.test(text)) return { kind: 'answer', refused: false, internalText: b.openDefects.length ? '진행중 ' + b.openDefects.map((d) => `${d.room} ${d.title}(${STAGE_KO[d.stage]})`).join(', ') : '진행중 하자가 없습니다.', sources: [{ type: 'db', title: '하자 집계', meta: '실시간' }] };
+    // 동을 미리 고를 필요 없음: 문장에 동이 있으면 그 동, 없으면 전체 동을 본다
+    const want = bldFromText(text);
+    const scope = want || '*';
+    const b = statusBoard(scope);
+    const tag = (r) => (want || !r._b) ? '' : `[${r._b}] `;
+    const scopeNote = want ? `${bldLabel(want)} 기준` : '전체 동 기준';
+    const src = (t) => [{ type: 'db', title: t, meta: `실시간 · ${scopeNote}` }];
+    if (/부족|모자/.test(text)) return { kind: 'answer', refused: false, internalText: b.shortage.length ? `부족 재고 ${b.shortage.length}건: ` + b.shortage.map((s) => `${tag(s)}${s.item}(${s.location}) ${s.qty}/${s.min}`).join(', ') : '최소 기준을 정한 품목 중 부족한 것은 없습니다. (수건 등 정량 없는 품목은 부족 판정 대상이 아닙니다)', sources: src('재고 집계') };
+    if (/미반납|안.*반납/.test(text)) return { kind: 'answer', refused: false, internalText: b.overdue.length ? '미반납 ' + b.overdue.map((e) => `${tag(e)}${e.label}(${e.borrower})`).join(', ') : '미반납 장비가 없습니다.', sources: src('장비 집계') };
+    if (/습득물|분실물/.test(text)) return { kind: 'answer', refused: false, internalText: `보관중 ${b.lostStored.length}건` + (b.lostUrgent.length ? `, 긴급 ${b.lostUrgent.length}건: ` + b.lostUrgent.map((l) => `${tag(l)}${l.desc}(${l.room || l.place})`).join(', ') : ''), sources: src('습득물 집계') };
+    if (/하자|시설/.test(text)) return { kind: 'answer', refused: false, internalText: b.openDefects.length ? '진행중 ' + b.openDefects.map((d) => `${tag(d)}${d.room} ${d.title}(${STAGE_KO[d.stage]})`).join(', ') : '진행중 하자가 없습니다.', sources: src('하자 집계') };
     if (/브리핑/.test(text)) return { kind: 'briefing' };
     const rs = searchSources(text);
     if (!rs.length) return { kind: 'answer', refused: true, internalText: '등록된 자료와 DB에서 근거를 찾지 못했습니다. 데이터 탭에서 관련 문서를 등록하면 답할 수 있습니다.', sources: [] };
@@ -152,25 +177,33 @@ const Logic = (() => {
     const cust = rs.find((r) => r.custVisible);
     const clip = (t) => t.length > 140 ? t.slice(0, 140) + '…' : t;
     // 질문 토큰과 관련된 문장/줄만 뽑아 "묻는 것만" 답한다 (전체 나열 방지)
-    return { kind: 'answer', refused: false, customerText: cust ? extract(cust.content, toks) : null, internalText: extract(top.content, toks) + (top.custVisible ? '' : ' _(내부 자료)_'), conflict,
+    // 동을 안 물어봤어도 어느 동 자료인지는 항상 밝힌다
+    const pre = (!want && top.bld && top.bld !== '*') ? `**${bldLabel(top.bld)}** — ` : '';
+    return { kind: 'answer', refused: false, customerText: cust ? extract(cust.content, toks) : null, internalText: pre + extract(top.content, toks) + (top.custVisible ? '' : ' _(내부 자료)_'), conflict,
       sources: rs.slice(0, 3).map((r, i) => ({ type: 'doc', n: i + 1, id: r.id, title: r.title, meta: `${['', '① 내부', '② VINFO', '③ 공식홈', '④ 메모'][r.priority] || ''} · ${(r.collectedAt || '').slice(0, 10)}${r.custVisible ? ' · 고객 안내 가능' : ' · 내부'}`, snippet: clip(r.content) })) };
   }
 
   /* AI에 넘길 현재 동 데이터 스냅샷 (개인 연락처 등은 제외) */
-  function snapshot() {
-    const b = Store.buildings().find((x) => x.id === Store.bld);
+  /* AI에 넘길 스냅샷 — 동을 미리 고를 필요가 없도록 전 동을 담고, 줄마다 동을 표시한다.
+     질문에 동이 있으면 그 동으로 좁혀 토큰을 아낀다. (개인 연락처 등은 제외) */
+  function snapshot(text) {
+    const want = text ? bldFromText(text) : null;
+    const scope = want || '*';
     const clip = (s, n) => String(s || '').slice(0, n);
+    const B = (r) => bldLabel(r.bld);
     return {
-      동: (b && b.name) || Store.bld,
+      범위: want ? bldLabel(want) : '전체 동',
+      동목록: Store.buildings().map((x) => `${x.id}=${x.name}`).join(', '),
       오늘: now().slice(0, 16),
-      재고: Store.inBld('stock').map((s) => ({ id: s.id, 품목: s.item, 위치: s.location, 수량: s.qty, 최소: s.min, 정량없음: !tracked(s), 비고: clip(s.note, 60) })),
-      장비: Store.inBld('equipment').map((e) => ({ id: e.id, 이름: e.label, 배터리: e.battery, 상태: e.condition, 대여자: e.borrower, 대여시각: e.loanedAt, 비고: clip(e.note, 60) })),
-      습득물: Store.inBld('lost').map((l) => ({ id: l.id, 품목: l.desc, 객실: l.room || l.place, 귀중품: !!l.valuable, 상태: l.status, 기한: l.deadline })),
-      하자: Store.inBld('defects').map((d) => ({ id: d.id, 객실: d.room, 제목: d.title, 단계: STAGE_KO[d.stage] || d.stage, 상세: clip(d.detail, 80) })),
-      톡: Store.inBld('messages').slice(-25).map((m) => ({ id: m.id, 종류: m.type, 작성자: m.author, 내용: clip(m.text, 160), 시각: m.ts })),
-      자료: Store.load().sources.filter((s) => (s.bld === Store.bld || s.bld === '*') && s.enabled !== false).map((s) => ({ 제목: s.title, 우선순위: s.priority, 고객안내가능: !!s.custVisible, 본문: clip(s.content, 3000) })),
+      재고: rows('stock', scope).map((s) => ({ id: s.id, 동: B(s), 품목: s.item, 위치: s.location, 수량: s.qty, 최소: s.min, 정량없음: !tracked(s), 비고: clip(s.note, 60) })),
+      장비: rows('equipment', scope).map((e) => ({ id: e.id, 동: B(e), 이름: e.label, 배터리: e.battery, 상태: e.condition, 대여자: e.borrower, 대여시각: e.loanedAt, 비고: clip(e.note, 60) })),
+      습득물: rows('lost', scope).map((l) => ({ id: l.id, 동: B(l), 품목: l.desc, 객실: l.room || l.place, 귀중품: !!l.valuable, 상태: l.status, 기한: l.deadline })),
+      하자: rows('defects', scope).map((d) => ({ id: d.id, 동: B(d), 객실: d.room, 제목: d.title, 단계: STAGE_KO[d.stage] || d.stage, 상세: clip(d.detail, 80) })),
+      톡: rows('messages', scope).slice(-25).map((m) => ({ id: m.id, 동: B(m), 종류: m.type, 작성자: m.author, 내용: clip(m.text, 160), 시각: m.ts })),
+      자료: Store.load().sources.filter((s) => s.enabled !== false && (!want || s.bld === want || s.bld === '*'))
+        .map((s) => ({ 제목: s.title, 동: s.bld === '*' ? '공통' : bldLabel(s.bld), 우선순위: s.priority, 고객안내가능: !!s.custVisible, 본문: clip(s.content, 3000) })),
     };
   }
 
-  return { statusBoard, briefing, parseCommand, answer, searchSources, snapshot, dday, daysSince, tracked, STAGES, STAGE_KO };
+  return { statusBoard, briefing, parseCommand, answer, searchSources, snapshot, dday, daysSince, tracked, bldFromText, bldLabel, STAGES, STAGE_KO };
 })();
