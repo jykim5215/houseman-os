@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 SW — 네트워크 우선 + 오프라인 캐시 폴백 (푸시 즉시 새 버전 반영) */
-const CACHE = 'hos-v0.9.0';
-const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'store.js', 'logic.js', 'ai.js', 'mapdata.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'hos-v0.9.1';
+const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'store.js', 'logic.js', 'ai.js', 'mapdata.js', 'illust.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

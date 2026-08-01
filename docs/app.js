@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.9.1';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -791,10 +791,12 @@ function bindMapGestures() {
 function placeSheet(id) {
   const p = MapData.places.find((x) => x.id === id); if (!p) return;
   const kd = MapData.KINDS[p.kind];
-  const rows = (p.items || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
-  const fl = (p.floors || []).map(([f, v]) => `<div class="flrow"><span class="fl">${esc(f)}</span><span>${esc(v)}</span></div>`).join('');
-  const bullets = (p.info || []).map((t) => `<li>${esc(t)}</li>`).join('');
-  sheet(`<div class="plhead ${kd.c}"><span class="kchip">${kd.ko}</span>${p.no ? `<span class="kchip no">가이드맵 ${p.no}</span>` : ''}</div>
+  const b = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // 이스케이프 후 **굵게**만 허용
+  const rows = (p.items || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${b(v)}</td></tr>`).join('');
+  const fl = (p.floors || []).map(([f, v]) => `<div class="flrow"><span class="fl">${esc(f)}</span><span>${b(v)}</span></div>`).join('');
+  const bullets = (p.info || []).map((t) => `<li${/^⚠/.test(t) ? ' class="warn"' : ''}>${b(t)}</li>`).join('');
+  const art = (p.art && Illust.has(p.art)) ? `<div class="plart">${Illust.svg(p.art)}</div>` : '';
+  sheet(`${art}<div class="plhead ${kd.c}"><span class="kchip">${kd.ko}</span>${p.no ? `<span class="kchip no">가이드맵 ${p.no}</span>` : ''}</div>
     <h3>${esc(p.name)}</h3>
     ${fl ? `<div class="floors">${fl}</div>` : ''}
     ${bullets ? `<ul class="plinfo">${bullets}</ul>` : ''}
