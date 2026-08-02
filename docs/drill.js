@@ -82,15 +82,21 @@ const Drill = (() => {
   }
 
   /* ── 화면들 ── */
+  /* 루트: 층 자료가 있으면 정면(층 선택), 없으면 구역 목록, 그것도 없으면 안내 */
   function viewFacade() {
     const rows = floorRows(bld);
+    if (rows.length) return facadeView(rows);
+    const items = bld.items || [];
+    if (items.length) return zoneView(items);
+    return blankView();
+  }
+
+  function facadeView(rows) {
     return {
-      title: bld.name, sub: rows.length ? '층을 눌러 들어가세요' : '층별 자료 없음',
-      html: rows.length
-        ? `<div class="facwrap">${facade(bld)}</div>
-        <p class="dnote">건물 정면은 실제 사진의 특징(형태·색·중앙 띠)을 따라 그린 그림입니다. 층 오른쪽 숫자는 <b>신경 쓸 객실 수</b>입니다.</p>`
-        : `<div class="plart">${Illust.svg(bld.art)}</div>
-        <div class="dempty">이 동은 <b>층별 자료가 아직 없습니다.</b><br>현장 게시물·업무 카드에서 확인된 내용만 넣습니다. 층별 린넨실·창고 배치를 알려주시면 바로 추가하겠습니다.</div>`,
+      title: bld.name, sub: W().floors,
+      html: `<div class="facwrap">${facade(bld)}</div>
+        <p class="dnote">건물 정면은 실제 사진의 특징(형태·색·중앙 띠)을 따라 그린 그림입니다.${isStay() ? ' 층 오른쪽 숫자는 <b>신경 쓸 객실 수</b>입니다.' : ''}</p>
+        ${infoBlock()}`,
       bind(root, push) {
         root.querySelectorAll('.fac .fl').forEach((g) => {
           const go = () => push(viewFloor(rows[+g.dataset.i]));
@@ -99,6 +105,59 @@ const Drill = (() => {
         });
       },
     };
+  }
+
+  /* 구역 목록 — 층 자료가 없는 시설은 '무엇이 어디에'를 종류별로 보여준다 */
+  function zoneView(items) {
+    const w = W();
+    const card = (it, i) => {
+      const n = String(it[1]).split(/\s·\s|\s\|\s/).filter(Boolean).length;
+      return `<button class="zcard" data-z="${i}">
+        <span class="zk">${E(it[0])}</span>
+        <span class="zv">${B(it[1])}</span>
+        <span class="zn">${n}개</span></button>`;
+    };
+    return {
+      title: bld.name, sub: `${w.plan} ${items.length}구역`,
+      html: `<div class="plart">${Illust.svg(bld.art)}</div>
+        <div class="dsec"><div class="dh">${w.plan}</div>
+          <div class="zgrid">${items.map(card).join('')}</div></div>
+        ${infoBlock()}
+        <p class="dnote">이 시설은 <b>층별 자료가 아직 없습니다.</b> 확인된 구성만 종류별로 정리했습니다. 층 배분은 확인 전이라 임의로 나누지 않았습니다.</p>
+        ${bld.roomsUrl ? `<div class="foot"><button class="btn" data-open style="width:100%">공식 페이지 열기</button></div>` : ''}`,
+      bind(root, push) {
+        root.querySelectorAll('[data-z]').forEach((b2) => b2.onclick = () => push(viewZone(items[+b2.dataset.z])));
+        const o = root.querySelector('[data-open]');
+        if (o) o.onclick = () => window.open(bld.roomsUrl, '_blank', 'noopener');
+      },
+    };
+  }
+
+  function viewZone(it) {
+    const parts = String(it[1]).split(/\s·\s|\s\|\s/).map((x) => x.trim()).filter(Boolean);
+    return {
+      title: it[0], sub: bld.name,
+      html: `<div class="dsec"><div class="dh">${E(it[0])} · ${parts.length}개</div>
+          <div class="zlist">${parts.map((x) => `<div class="zrow">${B(x)}</div>`).join('')}</div></div>
+        ${bld.roomsUrl ? `<div class="foot"><button class="btn" data-open style="width:100%">공식 페이지에서 보기</button></div>` : ''}`,
+      bind(root) { const o = root.querySelector('[data-open]'); if (o) o.onclick = () => window.open(bld.roomsUrl, '_blank', 'noopener'); },
+    };
+  }
+
+  function blankView() {
+    return {
+      title: bld.name, sub: '자료 미확보',
+      html: `<div class="plart">${Illust.svg(bld.art)}</div>
+        ${infoBlock()}
+        <div class="dempty">이 시설은 <b>층·구역 자료가 아직 없습니다.</b><br>확인된 내용만 넣는 원칙이라 비워 뒀습니다. 현장 자료를 주시면 바로 채웁니다.</div>`,
+    };
+  }
+
+  function infoBlock() {
+    const info = bld.info || [];
+    if (!info.length) return '';
+    return `<div class="dsec"><div class="dh">알아둘 것</div>
+      <ul class="plinfo">${info.map((t) => `<li${/^⚠/.test(t) ? ' class="warn"' : ''}>${B(t)}</li>`).join('')}</ul></div>`;
   }
 
   function viewFloor(row) {
@@ -312,13 +371,25 @@ const Drill = (() => {
   }
   const push = (v) => { stack.push(v); render('fwd'); };
   const pop = () => { if (stack.length <= 1) return close(); stack.pop(); render('back'); };
-  function close() { const el = shell(); el.classList.remove('open'); setTimeout(() => { el.classList.add('hide'); el.querySelector('#dStage').innerHTML = ''; stack = []; }, 240); }
+  /* 닫기 정리는 240ms 뒤에 하는데, 그 사이에 다시 열리면 새 화면을 지워 버린다.
+     그래서 토큰으로 무효화한다(닫자마자 다시 열면 빈 화면이던 버그). */
+  let closeToken = 0;
+  function close() {
+    const el = shell(); el.classList.remove('open');
+    const t = ++closeToken;
+    setTimeout(() => {
+      if (t !== closeToken) return;                 // 그새 다시 열렸다 → 정리하지 않는다
+      el.classList.add('hide'); el.querySelector('#dStage').innerHTML = ''; stack = [];
+    }, 240);
+  }
   function open(placeId) {
     const p = MapData.places.find((x) => x.id === placeId);
-    if (!p || !(p.bld || floorRows(p).length)) return false;
+    if (!p) return false;   // 모든 시설에서 열린다 — 자료가 없으면 없다고 알려 준다
+    closeToken++;                                   // 진행 중인 닫기 정리를 무효화
     bld = p; try { Store.ensureRooms(); } catch (e) {}
     stack = [viewFacade()];
     const el = shell(); el.classList.remove('hide');
+    el.querySelector('#dStage').innerHTML = '';      // 이전에 열었던 화면이 남지 않게 비운다
     setTimeout(() => el.classList.add('open'), 10);
     render('fwd');
     return true;

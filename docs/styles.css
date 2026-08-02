@@ -590,3 +590,18 @@ h3{letter-spacing:-.02em}
 /* 필터 전환도 부드럽게 */
 .mapfilter button{transition:transform .12s var(--ease),background .2s ease,color .2s ease,border-color .2s ease}
 .rmphoto{display:block;width:100%;height:auto;max-height:300px;object-fit:cover}
+
+/* 구역 목록 (층 자료 없는 시설) */
+.zgrid{display:flex;flex-direction:column;gap:8px}
+.zcard{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;text-align:left;
+  border:2px solid var(--line-strong);border-radius:var(--r-md);background:var(--surface);
+  padding:12px 13px;min-height:56px;transition:transform .12s var(--ease),border-color .15s ease}
+.zcard:active{transform:scale(.985);border-color:var(--accent)}
+.zcard .zk{font-size:12px;font-weight:800;color:var(--accent);background:var(--accent-bg);
+  border-radius:999px;padding:5px 11px;white-space:nowrap}
+.zcard .zv{font-size:12.5px;color:var(--text-2);line-height:1.5;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.zcard .zn{font-size:11px;font-weight:800;color:var(--dim);white-space:nowrap}
+.zlist{display:flex;flex-direction:column;gap:7px}
+.zrow{border:2px solid var(--line);border-left-width:5px;border-left-color:var(--accent-line);
+  border-radius:var(--r-sm);padding:11px 13px;font-size:13.5px;color:var(--text-2);background:var(--surface)}
