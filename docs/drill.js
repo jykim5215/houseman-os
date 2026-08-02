@@ -23,6 +23,18 @@ const Drill = (() => {
     'D': (f) => (f >= 2 && f <= 9) ? '호텔형 미취사' : '',
     '캄': (f) => (f >= 11 && f <= 13) ? '펫 전용' : '',
   };
+  /* 시설 종류별 문구 — 숙박이 아닌 곳에 '객실·전망' 같은 말을 쓰지 않는다 */
+  const WORDS = {
+    stay: { floors: '층을 눌러 들어가세요', linen: '이 층의 린넨실 · 비품', unit: '객실', plan: '객실 배치' },
+    play: { floors: '층을 눌러 보세요', linen: '이 층의 시설', unit: '시설', plan: '입점 · 구역' },
+    food: { floors: '층을 눌러 보세요', linen: '이 구역의 업장', unit: '업장', plan: '업장' },
+    conv: { floors: '층을 눌러 보세요', linen: '이 층의 시설', unit: '시설', plan: '시설' },
+    move: { floors: '층을 눌러 보세요', linen: '안내', unit: '시설', plan: '시설' },
+    nature: { floors: '둘러보기', linen: '안내', unit: '구역', plan: '구역' },
+  };
+  const W = () => WORDS[bld.kind] || WORDS.stay;
+  const isStay = () => bld.kind === 'stay';
+
   const EXTRA = {
     B: (f) => (f >= 16 && f <= 20) ? ['전자레인지 있음'] : [],
     C: (f) => (f === 3 || f === 11) ? ['컴퓨터 있음'] : [],
@@ -92,34 +104,61 @@ const Drill = (() => {
   function viewFloor(row) {
     const [label, what, kind] = row;
     const fl = parseFloors(label);
-    const rooms = [];
-    fl.forEach((f) => (RoomData.has(bld.bld) ? RoomData.onFloor(bld.bld, f) : []).forEach((r) => rooms.push({ ...r, f })));
-    const type = fl.length && TYPE[bld.bld] ? TYPE[bld.bld](fl[0]) : '';
-    const extra = fl.length && EXTRA[bld.bld] ? EXTRA[bld.bld](fl[0]) : [];
+    const w = W();
+    const type = isStay() && fl.length && TYPE[bld.bld] ? TYPE[bld.bld](fl[0]) : '';
+    const extra = isStay() && fl.length && EXTRA[bld.bld] ? EXTRA[bld.bld](fl[0]) : [];
     const live = liveOnFloor(fl);
-    const card = (r) => `<button class="rmcard" data-no="${E(r.no)}">
-        <span class="no">${E(r.no)}</span>
-        <span class="tg">${r.tags.map((t) => `<i class="t-${t.k}">${E(t.t)}</i>`).join('')}</span></button>`;
+    const rooms = isStay() && bld.bld ? Store.roomsOn(bld.bld, fl) : [];
     return {
-      title: `${bld.short || bld.name} · ${label}`, sub: type || '층 상세',
+      title: `${bld.short || bld.name} · ${label}`, sub: type || (isStay() ? '층 상세' : w.unit),
       html: `
-        <div class="dsec"><div class="dh">이 층의 린넨실 · 비품</div>
+        <div class="dsec"><div class="dh">${w.linen}</div>
           <div class="dbox k-${kind || 'room'}">${B(what)}</div></div>
         ${type || extra.length ? `<div class="dsec"><div class="dh">객실 기준</div>
           <div class="dchips">${type ? `<span class="dchip on">${E(type)}</span>` : ''}${extra.map((x) => `<span class="dchip">${E(x)}</span>`).join('')}</div></div>` : ''}
         ${live.length ? `<div class="dsec"><div class="dh">지금 진행 중</div>
           <div class="dlive">${live.map((l) => `<div class="lv ${l.k}"><b>${E(l.room)}</b> ${E(l.text)}</div>`).join('')}</div></div>` : ''}
-        <div class="dsec"><div class="dh">객실 배치 ${rooms.length ? `<span class="cnt">${rooms.length}실</span>` : ''}</div>
-          ${rooms.length ? `<div class="rmgrid">${rooms.map(card).join('')}</div>`
-        : `<div class="dempty">이 층은 <b>등록된 객실 정보가 없습니다.</b><br>현장 게시물·업무 카드에서 확인된 객실만 표시합니다. 추측으로 채우지 않습니다.</div>`}
-        </div>
-        ${RoomData.has(bld.bld) ? `<p class="dnote">출처: ${E(RoomData.source(bld.bld))}</p>` : ''}`,
+        ${isStay() ? `<div class="dsec"><div class="dh">${w.plan} ${rooms.length ? `<span class="cnt">${rooms.length}실</span>` : ''}</div>
+          ${rooms.length ? plan(rooms) + legend()
+        : `<div class="dempty">이 층은 <b>등록된 객실이 없습니다.</b><br>현장에서 확인된 객실만 넣습니다. 층별 호수 목록을 주시면 바로 채웁니다.</div>`}
+        </div>` : ''}
+        ${isStay() && RoomData.has(bld.bld) ? `<p class="dnote">출처: ${E(RoomData.source(bld.bld))} · 배치는 호수 순서로 그린 개념도입니다.</p>` : ''}
+        ${bld.floorNote ? `<div class="warnbox">${E(bld.floorNote)}</div>` : ''}`,
       bind(root, push) {
-        root.querySelectorAll('.rmcard').forEach((b2) => b2.onclick = () => {
-          const r = rooms.find((x) => x.no === b2.dataset.no); push(viewRoom(r, type, extra));
+        root.querySelectorAll('[data-no]').forEach((b2) => b2.onclick = () => {
+          const r = rooms.find((x) => x.no === b2.dataset.no); if (r) push(viewRoom(r, type, extra));
         });
       },
     };
+  }
+
+  /* 복도를 사이에 둔 객실 평면 개념도 — 호수 순서대로 위·아래로 나눠 배치 */
+  function plan(rooms) {
+    const half = Math.ceil(rooms.length / 2);
+    const top = rooms.slice(0, half), bot = rooms.slice(half);
+    const cw = 62, ch = 46, gap = 5, corr = 26;
+    const cols = Math.max(top.length, bot.length);
+    const W2 = cols * (cw + gap) + gap, H2 = ch * 2 + corr + gap * 3;
+    const cell = (r, i, y) => {
+      const st = Store.ROOM_STATUS[r.status] || Store.ROOM_STATUS.unknown;
+      return `<g class="rm s-${st.k}" data-no="${E(r.no)}" tabindex="0" role="button" aria-label="${E(r.no)}호 ${E(st.ko)}">
+        <rect x="${gap + i * (cw + gap)}" y="${y}" width="${cw}" height="${ch}" rx="7"/>
+        <text class="n" x="${gap + i * (cw + gap) + cw / 2}" y="${y + 21}">${E(r.no)}</text>
+        <text class="s" x="${gap + i * (cw + gap) + cw / 2}" y="${y + 35}">${E(st.ko)}</text>
+      </g>`;
+    };
+    return `<div class="planwrap"><svg class="plan" width="${W2}" height="${H2}" viewBox="0 0 ${W2} ${H2}" xmlns="http://www.w3.org/2000/svg">
+      <rect class="corr" x="0" y="${gap + ch}" width="${W2}" height="${corr}"/>
+      <text class="corrt" x="${W2 / 2}" y="${gap + ch + corr / 2 + 4}">복도</text>
+      ${top.map((r, i) => cell(r, i, gap)).join('')}
+      ${bot.map((r, i) => cell(r, i, gap * 2 + ch + corr)).join('')}
+    </svg></div>`;
+  }
+  function legend() {
+    return `<div class="plegend">${Object.keys(Store.ROOM_STATUS).map((k) => {
+      const s = Store.ROOM_STATUS[k];
+      return `<span class="lg s-${s.k}"><i></i>${E(s.ko)}</span>`;
+    }).join('')}</div>`;
   }
 
   function liveOnFloor(fl) {
@@ -136,27 +175,45 @@ const Drill = (() => {
 
   function viewRoom(r, type, extra) {
     const d = Store.load();
+    const flags = (RoomData.has(bld.bld) ? RoomData.onFloor(bld.bld, r.floor) : []).find((x) => x.no === r.no);
+    const tags = (flags && flags.tags) || [];
     const defects = (d.defects || []).filter((x) => x.bld === bld.bld && String(x.room) === r.no);
     const lost = (d.lost || []).filter((x) => x.bld === bld.bld && String(x.room) === r.no);
     const open = defects.filter((x) => x.stage !== 'done');
-    const state = open.length ? { t: `하자 진행 중 ${open.length}건`, k: 'bad' }
-      : lost.some((x) => x.status === 'stored') ? { t: '습득물 보관 중', k: 'warn' }
-        : { t: '특이 상태 없음', k: 'ok' };
+    const st = Store.ROOM_STATUS[r.status] || Store.ROOM_STATUS.unknown;
     return {
-      title: `${r.no}호`, sub: `${bld.short || bld.name} · ${r.f}층`,
+      title: `${r.no}호`, sub: `${bld.short || bld.name} · ${r.floor}층`,
       html: `
         <div class="rmhead">
           <div class="rmno">${E(r.no)}</div>
-          <div class="rmmeta"><div>${E(bld.name)}</div><div class="meta">${r.f}층${type ? ' · ' + E(type) : ''}</div></div>
-          <span class="rmstate s-${state.k}">${E(state.t)}</span>
+          <div class="rmmeta"><div>${E(bld.name)}</div><div class="meta">${r.floor}층${type ? ' · ' + E(type) : ''}</div></div>
+          <span class="rmstate p-${st.k}">${E(st.ko)}</span>
         </div>
-        ${r.tags.length ? `<div class="dsec"><div class="dh">특이사항</div>
-          <div class="dtags">${r.tags.map((t) => `<div class="dtag t-${t.k}"><b>${E(t.t)}</b>${t.d ? `<span>${E(t.d)}</span>` : ''}</div>`).join('')}</div></div>` : ''}
+        <div class="dsec"><div class="dh">객실 상태</div>
+          <div class="stpick">${Object.keys(Store.ROOM_STATUS).map((k) => {
+        const v = Store.ROOM_STATUS[k];
+        return `<button class="stbtn p-${v.k} ${k === r.status ? 'on' : ''}" data-st="${k}">${E(v.ko)}</button>`;
+      }).join('')}</div>
+          <p class="dnote">지금은 직접 표시합니다. 프런트 재실 데이터가 연결되면 자동으로 채워집니다.</p></div>
+        ${tags.length ? `<div class="dsec"><div class="dh">특이사항</div>
+          <div class="dtags">${tags.map((t) => `<div class="dtag t-${t.k}"><b>${E(t.t)}</b>${t.d ? `<span>${E(t.d)}</span>` : ''}</div>`).join('')}</div></div>` : ''}
         ${extra.length ? `<div class="dsec"><div class="dh">이 층 기준</div><div class="dchips">${extra.map((x) => `<span class="dchip">${E(x)}</span>`).join('')}</div></div>` : ''}
         ${open.length ? `<div class="dsec"><div class="dh">진행 중 하자</div>${open.map((x) => `<div class="lv bad"><b>${E(x.title)}</b> — ${E(Logic.STAGE_KO[x.stage] || x.stage)}${x.detail ? '<br>' + E(x.detail) : ''}</div>`).join('')}</div>` : ''}
         ${lost.length ? `<div class="dsec"><div class="dh">습득물</div>${lost.map((x) => `<div class="lv warn"><b>${E(x.desc)}</b> — ${E(x.status === 'stored' ? '보관 중' : '인계됨')}</div>`).join('')}</div>` : ''}
-        <div class="foot"><button class="btn filled" data-photo style="width:100%">객실 실사 · 구조 보기</button></div>`,
-      bind(root, push) { root.querySelector('[data-photo]').onclick = () => push(viewPhoto(r, type)); },
+        <div class="foot"><button class="btn filled" data-photo style="width:100%">객실 구조 · 실사 보기</button></div>`,
+      bind(root, push) {
+        root.querySelector('[data-photo]').onclick = () => push(viewPhoto(r, type));
+        root.querySelectorAll('[data-st]').forEach((b2) => b2.onclick = () => {
+          try {
+            Store.setRoomStatus(r.id, b2.dataset.st, { worker: (Store.Auth.current || {}).name || '' });
+            r.status = b2.dataset.st;
+            root.querySelectorAll('[data-st]').forEach((x) => x.classList.toggle('on', x === b2));
+            const badge = root.querySelector('.rmstate');
+            const v = Store.ROOM_STATUS[r.status];
+            badge.className = 'rmstate p-' + v.k; badge.textContent = v.ko;
+          } catch (e) { alert(e.message); }
+        });
+      },
     };
   }
 
@@ -164,9 +221,9 @@ const Drill = (() => {
     const spec = (bld.items || []).filter(([k]) => /객실|비품|수건|세미취사|컴퓨터|추가침구/.test(k));
     const url = bld.roomsUrl || 'https://www.sonohotelsresorts.com/complex_vp/roomsviewall';
     return {
-      title: `${r.no}호 · 실사`, sub: '공식 객실 정보',
+      title: `${r.no}호 · 구조`, sub: '객실 구성 · 실사',
       html: `
-        <div class="plart">${Illust.svg(bld.art)}</div>
+        <div class="plart" id="rmPhoto">${Illust.svg(bld.art)}</div>
         <div class="dsec"><div class="dh">객실 구성</div>
           ${spec.length ? `<table class="pltab">${spec.map(([k, v]) => `<tr><th>${E(k)}</th><td>${B(v)}</td></tr>`).join('')}</table>`
         : '<div class="dempty">등록된 객실 구성 정보가 없습니다.</div>'}
@@ -175,6 +232,14 @@ const Drill = (() => {
         <div class="foot"><button class="btn filled" data-open style="width:100%">공식 홈페이지에서 실사 보기</button></div>`,
       bind(root) {
         root.querySelector('[data-open]').onclick = () => window.open(url, '_blank', 'noopener');
+        // 비공개 저장소에 실사 사진이 올라와 있으면 그림 대신 사진을 쓴다 (팀 기기만 접근)
+        Store.roomPhoto(bld.bld, r.no).then((src) => {
+          if (!src) return;
+          const box = root.querySelector('#rmPhoto'); if (!box) return;
+          box.innerHTML = `<img class="rmphoto" src="${src}" alt="${E(r.no)}호 실사">`;
+          const w = root.querySelector('.warnbox');
+          if (w) w.textContent = '팀 비공개 서버에 올라온 사진입니다. 공개 주소로는 나가지 않습니다.';
+        });
       },
     };
   }
@@ -223,7 +288,8 @@ const Drill = (() => {
   function open(placeId) {
     const p = MapData.places.find((x) => x.id === placeId);
     if (!p || !(p.bld || floorRows(p).length)) return false;
-    bld = p; stack = [viewFacade()];
+    bld = p; try { Store.ensureRooms(); } catch (e) {}
+    stack = [viewFacade()];
     const el = shell(); el.classList.remove('hide');
     setTimeout(() => el.classList.add('open'), 10);
     render('fwd');

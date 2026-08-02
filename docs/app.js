@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.10.0';
+const APP_VERSION = '0.11.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -661,7 +661,7 @@ function mapSvg() {
     if (p.shape === 'flat') return `<g class="pl ${k}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
       <rect class="flat" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="14"/>
       <text class="nm" x="${cx}" y="${p.y + p.h / 2 + 6}">${esc2(label)}</text></g>`;
-    return `<g class="pl ${k}${p.big ? ' big' : ''}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
+    return `<g class="pl ${k}${p.big ? ' big' : ''}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}" style="--d:${(p.y / 900).toFixed(2)}s">
       <ellipse class="shadow" cx="${cx + 4}" cy="${p.y + p.h + lv + 8}" rx="${p.w * 0.54}" ry="7"/>
       <rect class="side" x="${p.x}" y="${p.y + 7}" width="${p.w}" height="${p.h + lv}" rx="9"/>
       <rect class="top" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="9"/>

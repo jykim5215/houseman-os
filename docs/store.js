@@ -33,7 +33,7 @@ const Store = (() => {
       buildings: BUILDINGS.map((b) => ({ ...b })),
       config: { updatedAt: '' },
       users: [], workers: [],
-      stock: [], equipment: [], lost: [], defects: [], quickref: [], sources: [], messages: [], files: [], audit: [],
+      stock: [], equipment: [], lost: [], defects: [], quickref: [], sources: [], messages: [], files: [], rooms: [], audit: [],
     };
     seedReference(db);
     return db;
@@ -171,6 +171,7 @@ const Store = (() => {
     if (!db || !db.buildings) { db = seed(); persist(); }
     // 마이그레이션
     if (!db.messages) db.messages = [];
+    if (!db.rooms) db.rooms = [];
     if (!db.files) db.files = [];
     // updatedAt을 비워 둔다 — 빈 config가 '최신'으로 이겨서 팀 공유 AI 키를 지우던 문제 방지
     if (!db.config) db.config = { updatedAt: '' };
@@ -189,7 +190,7 @@ const Store = (() => {
   }
   function persist() { db.updatedAt = now(); localStorage.setItem(LS_DB, JSON.stringify(db)); }
 
-  const COLLECTIONS = ['stock', 'equipment', 'lost', 'defects', 'quickref', 'sources', 'messages', 'files'];
+  const COLLECTIONS = ['stock', 'equipment', 'lost', 'defects', 'quickref', 'sources', 'messages', 'files', 'rooms'];
   const EDITABLE = {
     stock: ['qty', 'min', 'note', 'item', 'location', 'category'],
     equipment: ['battery', 'condition', 'note', 'borrower', 'loanedAt', 'dueAt'],
@@ -198,6 +199,7 @@ const Store = (() => {
     sources: ['enabled', 'title', 'content', 'custVisible'],
     quickref: ['cat', 'label', 'value', 'note'],
     messages: ['text'],
+    rooms: ['status', 'type', 'note', 'no', 'floor'],
   };
 
   // 관리자가 넣은 AI 키를 팀 전체에 공유(비공개 저장소로만 동기화). 키는 사용자가 입력.
@@ -207,6 +209,61 @@ const Store = (() => {
     persist(); Sync.schedule();
   }
   function getSharedAI() { const c = load().config; return c && c.aiShared || null; }
+
+  /* ── 객실 상태 ──
+     status: unknown 미확인 · vacant 공실 · occupied 재실 · out 외출 · broken 고장
+     실제 재실 데이터는 나중에 프런트 시스템에서 받아 넣는다. 지금은 수동 표시. */
+  const ROOM_STATUS = {
+    unknown: { ko: '미확인', k: 'u' }, vacant: { ko: '공실', k: 'v' },
+    occupied: { ko: '재실', k: 'o' }, out: { ko: '외출', k: 't' }, broken: { ko: '고장', k: 'b' },
+  };
+  const roomId = (b, no) => `rm-${b}-${no}`;
+  /* 확인된 객실을 rooms 컬렉션에 멱등 등록 (RoomData가 있을 때만) */
+  function ensureRooms() {
+    if (typeof RoomData === 'undefined') return 0;
+    const d = load(); if (!d.rooms) d.rooms = [];
+    let n = 0;
+    BUILDINGS.forEach((b) => {
+      if (!RoomData.has(b.id)) return;
+      Object.keys(RoomData.counts(b.id)).forEach((f) => {
+        RoomData.onFloor(b.id, +f).forEach((r) => {
+          const id = roomId(b.id, r.no);
+          if (d.rooms.some((x) => x.id === id)) return;
+          d.rooms.push({ id, bld: b.id, no: r.no, floor: +f, type: '', status: 'unknown', note: '', updatedAt: now() });
+          n++;
+        });
+      });
+    });
+    if (n) persist();
+    return n;
+  }
+  const roomsOn = (b, floors) => (load().rooms || [])
+    .filter((r) => r.bld === b && floors.includes(r.floor))
+    .sort((a, x) => (+a.no) - (+x.no));
+  function setRoomStatus(id, status, opts) {
+    const r = (load().rooms || []).find((x) => x.id === id);
+    if (!r) throw new Error('객실을 찾을 수 없습니다');
+    return applyChanges([{ entity: 'rooms', entityId: id, field: 'status', newValue: status }], opts);
+  }
+
+  /* 비공개 저장소에서 파일 받아오기 (팀 코드로 연결된 기기만 가능).
+     객실 실사 사진처럼 공개 저장소에 두면 안 되는 자료를 여기에 둔다.
+     경로 예: photos/캄/1804.jpg → 없으면 photos/캄/_default.jpg */
+  const _fileCache = new Map();
+  async function privateFile(path) {
+    const cfg = Sync.cfg; if (!cfg || !cfg.token) return null;
+    if (_fileCache.has(path)) return _fileCache.get(path);
+    try {
+      const r = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${encodeURI(path)}?ref=${cfg.branch || 'main'}`,
+        { headers: { Authorization: 'Bearer ' + cfg.token, Accept: 'application/vnd.github.raw' } });
+      if (!r.ok) { _fileCache.set(path, null); return null; }
+      const url = URL.createObjectURL(await r.blob());
+      _fileCache.set(path, url); return url;
+    } catch { return null; }
+  }
+  async function roomPhoto(b, no) {
+    return (await privateFile(`photos/${b}/${no}.jpg`)) || (await privateFile(`photos/${b}/_default.jpg`));
+  }
 
   const bld = () => localStorage.getItem(LS_BLD) || 'B';
   const setBld = (b) => localStorage.setItem(LS_BLD, b);
@@ -507,6 +564,7 @@ const Store = (() => {
     load, persist, applyChanges, addRow, delRow, undo, find, seed,
     Sync, Team, Auth, uid, now, today, days, DEVICE, BUILDINGS,
     inBld, clearOperational, resetSeed, setSharedAI, getSharedAI,
+    ROOM_STATUS, ensureRooms, roomsOn, setRoomStatus, roomId, privateFile, roomPhoto,
     get bld() { return bld(); }, set bld(b) { setBld(b); },
     get worker() { return localStorage.getItem(LS_WORKER) || ''; },
     set worker(n) { localStorage.setItem(LS_WORKER, n); },
