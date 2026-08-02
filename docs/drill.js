@@ -122,7 +122,7 @@ const Drill = (() => {
           ${rooms.length ? plan(rooms) + legend()
         : `<div class="dempty">이 층은 <b>등록된 객실이 없습니다.</b><br>현장에서 확인된 객실만 넣습니다. 층별 호수 목록을 주시면 바로 채웁니다.</div>`}
         </div>` : ''}
-        ${isStay() && RoomData.has(bld.bld) ? `<p class="dnote">출처: ${E(RoomData.source(bld.bld))} · 배치는 호수 순서로 그린 개념도입니다.</p>` : ''}
+        ${isStay() && RoomData.has(bld.bld) ? `<p class="dnote">출처: ${E(RoomData.source(bld.bld))} · 평면도는 실측 도면이 아니라 호수 순서로 그린 개념 평면입니다 — 엘리베이터·린넨실 위치는 예시입니다.</p>` : ''}
         ${bld.floorNote ? `<div class="warnbox">${E(bld.floorNote)}</div>` : ''}`,
       bind(root, push) {
         root.querySelectorAll('[data-no]').forEach((b2) => b2.onclick = () => {
@@ -132,28 +132,56 @@ const Drill = (() => {
     };
   }
 
-  /* 복도를 사이에 둔 객실 평면 개념도 — 호수 순서대로 위·아래로 나눠 배치 */
+  /* 층 평면도 — 외벽·복도·객실 경계벽·출입문·코어(EV/계단)·린넨실을 갖춘 도면.
+     실측 도면이 아니라 호수 순서로 그린 개념 평면이다(화면에 명시). */
   function plan(rooms) {
+    const RW = 74, RD = 78, CORR = 44, WALL = 5, CORE = 86;   // 객실폭·깊이·복도·벽두께·코어폭
     const half = Math.ceil(rooms.length / 2);
     const top = rooms.slice(0, half), bot = rooms.slice(half);
-    const cw = 62, ch = 46, gap = 5, corr = 26;
     const cols = Math.max(top.length, bot.length);
-    const W2 = cols * (cw + gap) + gap, H2 = ch * 2 + corr + gap * 3;
-    const cell = (r, i, y) => {
+    const bodyW = cols * RW + CORE;                 // 코어를 오른쪽 끝에 둔다
+    const W2 = bodyW + WALL * 2;
+    const H2 = RD * 2 + CORR + WALL * 2;
+    const yTop = WALL, yCorr = WALL + RD, yBot = WALL + RD + CORR;
+
+    const room = (r, i, top_) => {
+      const x = WALL + i * RW;
+      const y = top_ ? yTop : yBot;
       const st = Store.ROOM_STATUS[r.status] || Store.ROOM_STATUS.unknown;
+      // 문: 복도 쪽 벽에 낸다
+      const dy = top_ ? y + RD : y;
+      const dx = x + RW * 0.5;
+      const swing = top_
+        ? `M${dx - 15} ${dy} a15 15 0 0 0 15 -15`
+        : `M${dx - 15} ${dy} a15 15 0 0 1 15 15`;
       return `<g class="rm s-${st.k}" data-no="${E(r.no)}" tabindex="0" role="button" aria-label="${E(r.no)}호 ${E(st.ko)}">
-        <rect x="${gap + i * (cw + gap)}" y="${y}" width="${cw}" height="${ch}" rx="7"/>
-        <text class="n" x="${gap + i * (cw + gap) + cw / 2}" y="${y + 21}">${E(r.no)}</text>
-        <text class="s" x="${gap + i * (cw + gap) + cw / 2}" y="${y + 35}">${E(st.ko)}</text>
+        <rect class="rf" x="${x}" y="${y}" width="${RW}" height="${RD}"/>
+        <text class="n" x="${x + RW / 2}" y="${y + RD / 2 - 2}">${E(r.no)}</text>
+        <text class="s" x="${x + RW / 2}" y="${y + RD / 2 + 15}">${E(st.ko)}</text>
+        <line class="dv" x1="${x + RW}" y1="${y}" x2="${x + RW}" y2="${y + RD}"/>
+        <rect class="dgap" x="${dx - 15}" y="${top_ ? dy - 2.5 : dy - 2.5}" width="30" height="5"/>
+        <path class="dsw" d="${swing}"/>
       </g>`;
     };
+    const cx = WALL + cols * RW;
     return `<div class="planwrap"><svg class="plan" width="${W2}" height="${H2}" viewBox="0 0 ${W2} ${H2}" xmlns="http://www.w3.org/2000/svg">
-      <rect class="corr" x="0" y="${gap + ch}" width="${W2}" height="${corr}"/>
-      <text class="corrt" x="${W2 / 2}" y="${gap + ch + corr / 2 + 4}">복도</text>
-      ${top.map((r, i) => cell(r, i, gap)).join('')}
-      ${bot.map((r, i) => cell(r, i, gap * 2 + ch + corr)).join('')}
+      <rect class="slab" x="0" y="0" width="${W2}" height="${H2}"/>
+      <rect class="corr" x="${WALL}" y="${yCorr}" width="${bodyW}" height="${CORR}"/>
+      ${top.map((r, i) => room(r, i, true)).join('')}
+      ${bot.map((r, i) => room(r, i, false)).join('')}
+      <g class="core">
+        <rect x="${cx}" y="${WALL}" width="${CORE}" height="${RD}"/>
+        <text x="${cx + CORE / 2}" y="${WALL + RD / 2 - 4}">엘리베이터</text>
+        <text x="${cx + CORE / 2}" y="${WALL + RD / 2 + 13}">· 계단</text>
+        <rect x="${cx}" y="${yBot}" width="${CORE}" height="${RD}"/>
+        <text x="${cx + CORE / 2}" y="${yBot + RD / 2 - 4}">린넨실</text>
+        <text x="${cx + CORE / 2}" y="${yBot + RD / 2 + 13}">· 창고</text>
+      </g>
+      <text class="corrt" x="${WALL + bodyW / 2}" y="${yCorr + CORR / 2 + 5}">복 도</text>
+      <rect class="env" x="${WALL / 2}" y="${WALL / 2}" width="${W2 - WALL}" height="${H2 - WALL}"/>
     </svg></div>`;
   }
+
   function legend() {
     return `<div class="plegend">${Object.keys(Store.ROOM_STATUS).map((k) => {
       const s = Store.ROOM_STATUS[k];
