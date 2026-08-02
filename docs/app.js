@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.12.0';
+const APP_VERSION = '0.13.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -650,42 +650,74 @@ function refreshAll() { applySharedAI(); renderCounters(); if ($('#tab-data').cl
 const mapState = { kind: 'all', k: 1.9, tx: 0, ty: 0, built: false, sel: null };
 function mapSvg() {
   const D = MapData, esc2 = esc;
+  /* 위에서 내려다본 배치도(平面) — 입체 블록이 아니라 건물 외곽선과 지붕면으로 그린다 */
   const block = (p) => {
-    const lv = p.lv || 0, k = MapData.KINDS[p.kind].c;
-    const cx = p.x + p.w / 2;
+    const k = MapData.KINDS[p.kind].c;
+    const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
     const label = p.short || p.name;
-    if (p.shape === 'slope') return `<g class="pl ${k}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
-      <path class="slope" d="M${p.x} ${p.y + p.h} L${cx} ${p.y} L${p.x + p.w} ${p.y + p.h} Z"/>
-      <path class="snow" d="M${cx - 46} ${p.y + 40} L${cx} ${p.y + 6} L${cx + 46} ${p.y + 40} Z"/>
-      <text class="nm" x="${cx}" y="${p.y + p.h - 16}">${esc2(label)}</text></g>`;
-    if (p.shape === 'flat') return `<g class="pl ${k}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">
-      <rect class="flat" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="14"/>
-      <text class="nm" x="${cx}" y="${p.y + p.h / 2 + 6}">${esc2(label)}</text></g>`;
-    return `<g class="pl ${k}${p.big ? ' big' : ''}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}" style="--d:${(p.y / 900).toFixed(2)}s">
-      <ellipse class="shadow" cx="${cx + 4}" cy="${p.y + p.h + lv + 8}" rx="${p.w * 0.54}" ry="7"/>
-      <rect class="side" x="${p.x}" y="${p.y + 7}" width="${p.w}" height="${p.h + lv}" rx="9"/>
-      <rect class="top" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="9"/>
-      <rect class="gloss" x="${p.x + 3}" y="${p.y + 3}" width="${p.w - 6}" height="${Math.max(4, p.h * 0.16)}" rx="4"/>
-      ${p.no ? `<circle class="no" cx="${p.x + p.w - 11}" cy="${p.y + 11}" r="9"/><text class="not" x="${p.x + p.w - 11}" y="${p.y + 15}">${p.no}</text>` : ''}
-      ${p.bld ? `<text class="bd" x="${p.x + 12}" y="${p.y + p.h / 2 + 5}">${esc2(p.bld)}</text>` : ''}
-      <text class="nm" x="${cx}" y="${p.y + p.h + lv + 26}">${esc2(label)}</text></g>`;
+    const g = (body, extra = '') => `<g class="pl ${k}${p.big ? ' big' : ''}${extra}" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc2(p.name)}">${body}</g>`;
+
+    if (p.shape === 'slope') {
+      // 슬로프: 흰 설면 + 등고선
+      const d = `M${p.x} ${p.y + p.h} L${cx - p.w * 0.18} ${p.y} L${cx + p.w * 0.18} ${p.y} L${p.x + p.w} ${p.y + p.h} Z`;
+      return g(`<path class="piste" d="${d}"/>
+        ${[0.3, 0.55, 0.8].map((t) => { const y = p.y + p.h * t; const hw = p.w * (0.18 + 0.32 * t); return `<path class="cont" d="M${cx - hw} ${y} Q${cx} ${y - 7} ${cx + hw} ${y}"/>`; }).join('')}
+        <text class="nm" x="${cx}" y="${p.y + p.h - 14}">${esc2(label)}</text>`);
+    }
+    if (p.shape === 'flat') {
+      // 골프·휴양지 등 부지
+      return g(`<rect class="area" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="16"/>
+        <text class="nm sm" x="${cx}" y="${cy + 5}">${esc2(label)}</text>`);
+    }
+    if (p.cluster) {
+      // 주차·흡연 등 분산 표시
+      return g(`<rect class="foot dash" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="6"/>
+        <text class="nm sm" x="${cx}" y="${p.y + p.h + 15}">${esc2(label)}</text>`);
+    }
+    // 일반 건물: 외곽선 + 지붕 능선 + 코어 표시
+    const inset = 7;
+    const ridge = p.w >= p.h
+      ? `<path class="ridge" d="M${p.x + inset} ${cy} L${p.x + p.w - inset} ${cy}"/>
+         <path class="hip" d="M${p.x} ${p.y} L${p.x + inset} ${cy} M${p.x + p.w} ${p.y} L${p.x + p.w - inset} ${cy}
+            M${p.x} ${p.y + p.h} L${p.x + inset} ${cy} M${p.x + p.w} ${p.y + p.h} L${p.x + p.w - inset} ${cy}"/>`
+      : `<path class="ridge" d="M${cx} ${p.y + inset} L${cx} ${p.y + p.h - inset}"/>
+         <path class="hip" d="M${p.x} ${p.y} L${cx} ${p.y + inset} M${p.x + p.w} ${p.y} L${cx} ${p.y + inset}
+            M${p.x} ${p.y + p.h} L${cx} ${p.y + p.h - inset} M${p.x + p.w} ${p.y + p.h} L${cx} ${p.y + p.h - inset}"/>`;
+    const big = p.w > 90 && p.h > 50;
+    return g(`<rect class="shadow" x="${p.x + 3}" y="${p.y + 4}" width="${p.w}" height="${p.h}" rx="4"/>
+      <rect class="foot" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="4"/>
+      ${ridge}
+      ${p.bld ? `<rect class="core" x="${p.x + p.w - 20}" y="${p.y + p.h - 20}" width="14" height="14" rx="2"/>` : ''}
+      ${p.no ? `<circle class="no" cx="${p.x + 12}" cy="${p.y + 12}" r="9"/><text class="not" x="${p.x + 12}" y="${p.y + 16}">${p.no}</text>` : ''}
+      ${big ? `<text class="nm in" x="${cx}" y="${cy + 5}">${esc2(label)}</text>`
+        : `<text class="nm" x="${cx}" y="${p.y + p.h + 16}">${esc2(label)}</text>`}`);
   };
-  const order = (p) => (p.shape ? 0 : 1);
-  const list = D.places.slice().sort((a, b) => order(a) - order(b) || (a.y + (a.h || 0)) - (b.y + (b.h || 0)));
+  const order = (p) => (p.shape ? 0 : p.cluster ? 1 : 2);
+  const list = D.places.slice().sort((a, b) => order(a) - order(b) || (a.y + a.h) - (b.y + b.h));
   return `<svg id="mapSvg" viewBox="0 0 ${D.W} ${D.H}" preserveAspectRatio="xMidYMid meet">
     <defs>
-      <linearGradient id="mgGround" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="var(--surface-3)"/><stop offset="1" stop-color="var(--bg)"/>
-      </linearGradient>
+      <pattern id="mgHatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <line x1="0" y1="0" x2="0" y2="7" stroke="var(--line-strong)" stroke-width="1" opacity=".5"/>
+      </pattern>
     </defs>
-    <rect class="ground" x="0" y="0" width="${D.W}" height="${D.H}" fill="url(#mgGround)"/>
+    <rect class="ground" x="0" y="0" width="${D.W}" height="${D.H}"/>
     <path class="green" d="M0 300 Q 260 258 520 300 T 1100 292 L1100 ${D.H} L0 ${D.H} Z"/>
-    <path class="road main" d="M30 372 C 260 344 520 380 780 350 C 900 336 1000 330 1080 318"/>
-    <path class="road" d="M300 560 C 460 528 660 534 860 566"/>
-    <path class="road thin" d="M470 372 L 500 604"/>
+    <path class="green2" d="M0 560 Q 300 522 620 566 T 1100 548 L1100 ${D.H} L0 ${D.H} Z"/>
+    <g class="roads">
+      <path class="rd" d="M30 372 C 260 344 520 380 780 350 C 900 336 1000 330 1080 318"/>
+      <path class="rd" d="M300 560 C 460 528 660 534 860 566"/>
+      <path class="rd sm" d="M470 372 L 500 604"/>
+      <path class="ctr" d="M30 372 C 260 344 520 380 780 350 C 900 336 1000 330 1080 318"/>
+      <path class="ctr" d="M300 560 C 460 528 660 534 860 566"/>
+    </g>
     ${list.map(block).join('')}
+    <g class="norths" transform="translate(1040,706)">
+      <circle r="20" class="nring"/><path class="nar" d="M0 -13 L6 6 L0 1 L-6 6 Z"/>
+      <text class="nt" y="-22">N</text>
+    </g>
   </svg>`;
 }
+
 function renderMap() {
   const stage = $('#mapStage');
   if (!mapState.built) {

@@ -354,8 +354,7 @@ h3{letter-spacing:-.02em}
 .mapzoom button:last-child{font-size:11.5px}
 .mapzoom button:active{transform:scale(.93);background:var(--surface-2)}
 
-#mapSvg .ground{fill:none}
-#mapSvg .road{stroke:var(--surface-3);stroke-width:13;fill:none;stroke-linecap:round;opacity:.9}
+
 #mapSvg text{font-family:inherit;text-anchor:middle;pointer-events:none;paint-order:stroke;
   stroke:var(--bg);stroke-width:3.4px;stroke-linejoin:round}
 #mapSvg .nm{font-size:14px;font-weight:800;fill:var(--text)}
@@ -363,8 +362,7 @@ h3{letter-spacing:-.02em}
 #mapSvg .not{font-size:11px;font-weight:800;fill:#fff;stroke:none}
 #mapSvg .pl{cursor:pointer;transition:opacity .18s ease,transform .16s var(--ease)}
 #mapSvg .pl rect,#mapSvg .pl path{transition:filter .16s ease}
-#mapSvg .pl .side{filter:brightness(.72)}
-#mapSvg .pl .top{stroke:rgba(255,255,255,.5);stroke-width:1.6}
+
 #mapSvg .pl .no{fill:rgba(0,0,0,.42)}
 #mapSvg .pl.dim{opacity:.2}
 #mapSvg .pl:active .top{filter:brightness(1.12)}
@@ -381,6 +379,99 @@ h3{letter-spacing:-.02em}
 #mapSvg .k-nature .flat{opacity:.5}
 #mapSvg .slope{fill:var(--surface-3);stroke:var(--line-strong);stroke-width:1.5}
 #mapSvg .snow{fill:#fffdf7;opacity:.95}
+.mapfilter .k-stay{color:#a9682f} .mapfilter .k-play{color:#2f8f83} .mapfilter .k-food{color:#b8791f}
+.mapfilter .k-conv{color:#4c6fa4} .mapfilter .k-move{color:#7b7166} .mapfilter .k-nature{color:#5a9430}
+.mapfilter button.on{color:var(--on-accent)}
+
+/* 시설 상세 시트 */
+.plhead{display:flex;gap:6px;margin-bottom:8px}
+.kchip{font-size:11.5px;font-weight:800;padding:5px 12px;border-radius:999px;background:var(--accent-bg);color:var(--accent)}
+.kchip.no{background:var(--surface-2);color:var(--dim)}
+.floors{border:2px solid var(--line-strong);border-radius:var(--r-md);overflow:hidden;margin:12px 0}
+.flrow{display:flex;gap:12px;align-items:center;padding:11px 13px;font-size:13px;border-bottom:1.5px solid var(--line)}
+.flrow:last-child{border-bottom:none}
+.flrow .fl{flex:none;min-width:54px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+.plinfo{margin:10px 0 0;padding-left:18px;font-size:13px;line-height:1.65;color:var(--text-2)}
+.plinfo li{margin-bottom:4px}
+.pltab{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px}
+.pltab th{text-align:left;vertical-align:top;padding:9px 10px 9px 0;font-weight:800;color:var(--accent);white-space:nowrap;width:1%}
+.pltab td{padding:9px 0;color:var(--text-2);line-height:1.6;border-bottom:1.5px solid var(--line)}
+.pltab tr:last-child td{border-bottom:none}
+.apptitle{font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--text);padding-left:2px}
+
+/* 시설 일러스트 (자체 제작 SVG) */
+.plart{margin:2px -22px 14px;overflow:hidden;border-radius:var(--r-md);
+  border:2px solid var(--line-strong);background:var(--surface-2);margin-left:0;margin-right:0}
+.plart .ilart{display:block;width:100%;height:132px}
+[data-theme="dark"] .plart .ilart{filter:saturate(.82) brightness(.84)}
+.plinfo li.warn{color:var(--warn);font-weight:600}
+.plinfo li.warn::marker{color:var(--warn)}
+.plinfo b,.pltab b,.flrow b{font-weight:800;color:var(--text)}
+
+/* 층별 배치 구조도 — 건물 단면처럼 위층이 위로 */
+.stwrap{margin:14px 0 4px}
+.sthead{font-size:11.5px;font-weight:800;color:var(--dim);margin-bottom:7px;letter-spacing:.02em}
+.stroof{height:0;border-left:11px solid transparent;border-right:11px solid transparent;
+  border-bottom:0;margin:0}
+.stack{display:flex;flex-direction:column;border:2px solid var(--line-strong);border-radius:var(--r-md);
+  overflow:hidden;background:var(--surface)}
+.stfl{display:flex;align-items:stretch;gap:0;border-bottom:1.5px solid var(--line);min-height:40px}
+.stfl:last-child{border-bottom:none}
+.stfl .lv{flex:none;width:74px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;
+  background:var(--surface-2);color:var(--text-2);border-right:2px solid var(--line-strong)}
+.stfl .wh{flex:1;display:flex;align-items:center;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--text-2)}
+.stfl.s-room .lv{background:var(--accent-bg);color:var(--accent)}
+.stfl.s-store .lv{background:#e3ecdc;color:#4a7040}
+.stfl.s-linen .lv{background:#dfe9f0;color:#3f6479}
+.stfl.s-pet   .lv{background:#f3e2ea;color:#8d4a68}
+.stfl.s-util  .lv{background:var(--surface-3);color:var(--dim)}
+.stfl.s-warn  .lv{background:var(--warn-bg);color:var(--warn)}
+.stfl.s-warn  .wh{color:var(--warn);font-weight:600}
+[data-theme="dark"] .stfl.s-store .lv{background:#2b3826;color:#a9cf9b}
+[data-theme="dark"] .stfl.s-linen .lv{background:#243440;color:#9dc2d6}
+[data-theme="dark"] .stfl.s-pet .lv{background:#3a2530;color:#e2a8c2}
+
+/* 지도 — 위에서 내려다본 배치도(平面) */
+#mapSvg .ground{fill:none}
+#mapSvg .green{fill:#9dbc73;opacity:.34}
+#mapSvg .green2{fill:#8caf62;opacity:.28}
+[data-theme="dark"] #mapSvg .green{fill:#3f5433;opacity:.44}
+[data-theme="dark"] #mapSvg .green2{fill:#374a2c;opacity:.4}
+#mapSvg .roads .rd{stroke:var(--surface);stroke-width:16;fill:none;stroke-linecap:round}
+#mapSvg .roads .rd.sm{stroke-width:9}
+#mapSvg .roads .ctr{stroke:var(--line-strong);stroke-width:1.4;fill:none;stroke-dasharray:9 11;opacity:.75}
+#mapSvg .pl{cursor:pointer;transition:opacity .18s ease}
+#mapSvg .pl .shadow{fill:rgba(60,40,18,.18)}
+[data-theme="dark"] #mapSvg .pl .shadow{fill:rgba(0,0,0,.45)}
+#mapSvg .pl .foot{stroke:var(--text);stroke-width:2.4}
+#mapSvg .pl .foot.dash{stroke-dasharray:5 4;stroke-width:2}
+#mapSvg .pl .ridge{stroke:var(--text);stroke-width:1.6;opacity:.5;fill:none}
+#mapSvg .pl .hip{stroke:var(--text);stroke-width:1.1;opacity:.3;fill:none}
+#mapSvg .pl .core{fill:var(--text);opacity:.32}
+#mapSvg .pl .area{fill:#7fa64d;opacity:.4;stroke:#5f7f38;stroke-width:2;stroke-dasharray:8 6}
+#mapSvg .pl .piste{fill:#fbfdff;stroke:var(--line-strong);stroke-width:2}
+[data-theme="dark"] #mapSvg .pl .piste{fill:#3a4048}
+#mapSvg .pl .cont{stroke:var(--line-strong);stroke-width:1.2;fill:none;opacity:.65}
+#mapSvg .pl .no{fill:rgba(0,0,0,.45)}
+#mapSvg .pl:active .foot{filter:brightness(.93)}
+#mapSvg .pl:focus{outline:none}
+#mapSvg .pl:focus-visible .foot{stroke:var(--accent);stroke-width:4}
+#mapSvg .pl.dim{opacity:.16}
+#mapSvg text{font-family:inherit;text-anchor:middle;pointer-events:none;paint-order:stroke;
+  stroke:var(--bg);stroke-width:3.4px;stroke-linejoin:round}
+#mapSvg .nm{font-size:14px;font-weight:800;fill:var(--text)}
+#mapSvg .nm.sm{font-size:12.5px}
+#mapSvg .nm.in{stroke-width:0;fill:#fff}
+#mapSvg .pl.big .nm{font-size:16px}
+#mapSvg .not{font-size:11px;font-weight:800;fill:#fff;stroke:none}
+#mapSvg .norths .nring{fill:var(--surface);stroke:var(--line-strong);stroke-width:2}
+#mapSvg .norths .nar{fill:var(--text)}
+#mapSvg .norths .nt{font-size:12px;font-weight:800;fill:var(--text-2);stroke:none}
+/* 종류별 지붕면 색 */
+#mapSvg .k-stay   .foot{fill:#b87a42} #mapSvg .k-play   .foot{fill:#3d9c8f}
+#mapSvg .k-food   .foot{fill:#d19a3d} #mapSvg .k-conv   .foot{fill:#6b8dbf}
+#mapSvg .k-move   .foot{fill:#9a9086} #mapSvg .k-nature .foot{fill:#7fae4a}
 .mapfilter .k-stay{color:#a9682f} .mapfilter .k-play{color:#2f8f83} .mapfilter .k-food{color:#b8791f}
 .mapfilter .k-conv{color:#4c6fa4} .mapfilter .k-move{color:#7b7166} .mapfilter .k-nature{color:#5a9430}
 .mapfilter button.on{color:var(--on-accent)}
@@ -605,3 +696,6 @@ h3{letter-spacing:-.02em}
 .zlist{display:flex;flex-direction:column;gap:7px}
 .zrow{border:2px solid var(--line);border-left-width:5px;border-left-color:var(--accent-line);
   border-radius:var(--r-sm);padding:11px 13px;font-size:13.5px;color:var(--text-2);background:var(--surface)}
+.plan .zn .zf{fill:var(--surface-2);stroke:var(--text);stroke-width:2.5}
+.plan .zn .zt{font-size:12.5px;font-weight:800;text-anchor:middle;font-family:inherit;fill:var(--text-2)}
+.plan .zn .zt.sm{font-size:11px;font-weight:700;fill:var(--dim)}

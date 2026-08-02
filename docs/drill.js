@@ -177,10 +177,10 @@ const Drill = (() => {
           <div class="dchips">${type ? `<span class="dchip on">${E(type)}</span>` : ''}${extra.map((x) => `<span class="dchip">${E(x)}</span>`).join('')}</div></div>` : ''}
         ${live.length ? `<div class="dsec"><div class="dh">지금 진행 중</div>
           <div class="dlive">${live.map((l) => `<div class="lv ${l.k}"><b>${E(l.room)}</b> ${E(l.text)}</div>`).join('')}</div></div>` : ''}
-        ${isStay() ? `<div class="dsec"><div class="dh">${w.plan} ${rooms.length ? `<span class="cnt">${rooms.length}실</span>` : ''}</div>
-          ${rooms.length ? plan(rooms) + legend()
-        : `<div class="dempty">이 층은 <b>등록된 객실이 없습니다.</b><br>현장에서 확인된 객실만 넣습니다. 층별 호수 목록을 주시면 바로 채웁니다.</div>`}
-        </div>` : ''}
+        <div class="dsec"><div class="dh">층 평면도 ${rooms.length ? `<span class="cnt">${rooms.length}실</span>` : ''}</div>
+          ${rooms.length ? plan(rooms) + legend() : planZones(what)}
+          ${isStay() && !rooms.length ? `<p class="dnote">이 층은 등록된 객실이 없어 <b>용도별 평면</b>으로 보여 줍니다. 층별 호수 목록을 주시면 객실 평면으로 바뀝니다.</p>` : ''}
+        </div>
         ${isStay() && RoomData.has(bld.bld) ? `<p class="dnote">출처: ${E(RoomData.source(bld.bld))} · 평면도는 실측 도면이 아니라 호수 순서로 그린 개념 평면입니다 — 엘리베이터·린넨실 위치는 예시입니다.</p>` : ''}
         ${bld.floorNote ? `<div class="warnbox">${E(bld.floorNote)}</div>` : ''}`,
       bind(root, push) {
@@ -236,6 +236,46 @@ const Drill = (() => {
         <text x="${cx + CORE / 2}" y="${yBot + RD / 2 - 4}">린넨실</text>
         <text x="${cx + CORE / 2}" y="${yBot + RD / 2 + 13}">· 창고</text>
       </g>
+      <text class="corrt" x="${WALL + bodyW / 2}" y="${yCorr + CORR / 2 + 5}">복 도</text>
+      <rect class="env" x="${WALL / 2}" y="${WALL / 2}" width="${W2 - WALL}" height="${H2 - WALL}"/>
+    </svg></div>`;
+  }
+
+  /* 객실이 없는 층(창고·린넨·시설)도 평면으로 — 외벽·복도·코어 + 용도별 실 */
+  function planZones(what) {
+    const parts = String(what).split(/\s·\s|\s\|\s|,\s*/).map((x) => x.trim()).filter(Boolean).slice(0, 10);
+    const RW = 108, RD = 78, CORR = 40, WALL = 5, CORE = 84;
+    const half = Math.ceil(parts.length / 2) || 1;
+    const top = parts.slice(0, half), bot = parts.slice(half);
+    const cols = Math.max(top.length, bot.length, 1);
+    const bodyW = cols * RW + CORE, W2 = bodyW + WALL * 2;
+    const H2 = RD * 2 + CORR + WALL * 2;
+    const yTop = WALL, yCorr = WALL + RD, yBot = WALL + RD + CORR;
+    const cellsOf = (arr, y, isTop) => arr.map((t, i) => {
+      const x = WALL + i * RW;
+      const dx = x + RW * 0.5, dy = isTop ? y + RD : y;
+      const swing = isTop ? `M${dx - 15} ${dy} a15 15 0 0 0 15 -15` : `M${dx - 15} ${dy} a15 15 0 0 1 15 15`;
+      // 긴 이름은 두 줄로
+      const words = t.split(/\s+/); let l1 = '', l2 = '';
+      words.forEach((w2) => { if ((l1 + ' ' + w2).trim().length <= 9 && !l2) l1 = (l1 + ' ' + w2).trim(); else l2 = (l2 + ' ' + w2).trim(); });
+      return `<g class="zn">
+        <rect class="zf" x="${x}" y="${y}" width="${RW}" height="${RD}"/>
+        <text class="zt" x="${x + RW / 2}" y="${y + RD / 2 + (l2 ? -4 : 5)}">${E(l1)}</text>
+        ${l2 ? `<text class="zt sm" x="${x + RW / 2}" y="${y + RD / 2 + 14}">${E(l2.length > 12 ? l2.slice(0, 11) + '…' : l2)}</text>` : ''}
+        <line class="dv" x1="${x + RW}" y1="${y}" x2="${x + RW}" y2="${y + RD}"/>
+        <rect class="dgap" x="${dx - 15}" y="${dy - 2.5}" width="30" height="5"/>
+        <path class="dsw" d="${swing}"/></g>`;
+    }).join('');
+    const cx = WALL + cols * RW;
+    return `<div class="planwrap"><svg class="plan" width="${W2}" height="${H2}" viewBox="0 0 ${W2} ${H2}" xmlns="http://www.w3.org/2000/svg">
+      <rect class="slab" x="0" y="0" width="${W2}" height="${H2}"/>
+      <rect class="corr" x="${WALL}" y="${yCorr}" width="${bodyW}" height="${CORR}"/>
+      ${cellsOf(top, yTop, true)}${cellsOf(bot, yBot, false)}
+      <g class="core"><rect x="${cx}" y="${WALL}" width="${CORE}" height="${RD}"/>
+        <text x="${cx + CORE / 2}" y="${WALL + RD / 2 - 4}">엘리베이터</text>
+        <text x="${cx + CORE / 2}" y="${WALL + RD / 2 + 13}">· 계단</text>
+        <rect x="${cx}" y="${yBot}" width="${CORE}" height="${RD}"/>
+        <text x="${cx + CORE / 2}" y="${yBot + RD / 2 + 4}">비상계단</text></g>
       <text class="corrt" x="${WALL + bodyW / 2}" y="${yCorr + CORR / 2 + 5}">복 도</text>
       <rect class="env" x="${WALL / 2}" y="${WALL / 2}" width="${W2 - WALL}" height="${H2 - WALL}"/>
     </svg></div>`;
