@@ -51,7 +51,7 @@ const MapData = (() => {
       items: [['시골장터', '한식 — 정겨운 장터 분위기 (가이드맵 14번)'], ['BBQ 셀프가든', '야외 바비큐 (가이드맵 15번)']] },
 
     /* ── 숙박 ── */
-    { id: 'E', name: '소노펫 클럽&리조트', short: '소노펫', art: 'pet', kind: 'stay', x: 452, y: 510, w: 88, h: 54, lv: 20, bld: 'E',
+    { id: 'E', name: '소노펫 클럽&리조트', short: '소노펫', art: 'pet', roomsUrl: 'https://www.sonohotelsresorts.com/complex_vp/roomsviewall', kind: 'stay', x: 452, y: 510, w: 88, h: 54, lv: 20, bld: 'E',
       info: ['앱에서 E · 노블리안동 (객실 등급이 소노펫 클럽&리조트와 일치해 이 건물로 봤습니다)',
         '⚠ 참고 — 공식홈에서 "노블리안"은 **소노펠리체·소노펠리체 빌리지의 객실 등급명**으로 쓰입니다. 사내에서 부르는 노블리안동이 소노펠리체 쪽을 뜻한다면 알려주세요.',
         '반려동물 몸무게 45kg 이하 입실 가능', '종합백신 + 광견병 접종 완료 확인 필요', '중성화 안 된 반려견은 매너벨트 착용 필수', '공공영역 이동 시 고정형 1.5m 리드줄 (동물보호법)'],
@@ -59,7 +59,7 @@ const MapData = (() => {
         ['부대', 'SONO Pet Shop · Pet Boarding(위탁) · Pet Foamy(셀프 워시) · Pet Healing Care'],
         ['야외', '소노펫 플레이그라운드 (가이드맵 2번)'],
         ['수건', '바스 · 일반 · 페이스타올 3종']] },
-    { id: 'D', name: '소노벨 D동 (메이플·호텔)', short: '소노벨 D', art: 'hotel', kind: 'stay', x: 456, y: 420, w: 84, h: 56, lv: 30, bld: 'D',
+    { id: 'D', name: '소노벨 D동 (메이플·호텔)', short: '소노벨 D', art: 'hotel', roomsUrl: 'https://www.sonohotelsresorts.com/belle_vp/roomsviewall', kind: 'stay', x: 456, y: 420, w: 84, h: 56, lv: 30, bld: 'D',
       info: ['앱에서 D · 메이플동. 가이드맵의 "소노문 비발디파크" 위치', '호텔형 미취사 객실 — 객실은 2~9층', '46.62㎡ · 침실 + 화장실 · 정원 2인(더블+더블로 추가 2인 가능)'],
       floors: [['2~9F', '객실 (미취사)'], ['1F', '로비 · 장비 락커'], ['B1', '앤트월드 — 가족 놀이시설 (가이드맵 4번)']],
       stack: [
@@ -68,7 +68,7 @@ const MapData = (() => {
         ['B1', '앤트월드 — 가족 놀이시설', 'util'],
       ],
       items: [['비품', '호텔 기준 — 칫솔·치약·헤어빗·컨디셔너 제공 + 미니바 무료'], ['수건', '바스 · 일반 · 페이스타올 3종']] },
-    { id: '캄', name: '소노캄 비발디파크', short: '소노캄', art: 'calm', kind: 'stay', x: 568, y: 512, w: 94, h: 62, lv: 32, bld: '캄',
+    { id: '캄', name: '소노캄 비발디파크', short: '소노캄', art: 'calm', roomsUrl: 'https://www.sonohotelsresorts.com/calm_vp/roomsviewall', kind: 'stay', x: 568, y: 512, w: 94, h: 62, lv: 32, bld: '캄',
       info: ['앱에서 캄 · 소노캄동', '인원 추가 1인 50,000원 (침구류 포함) — 다른 사업장 11,000원과 다름', '침구 추가 요금은 별도 청구하지 않고 인원 추가 규정 적용'],
       floors: [['B1', 'K1 SPEED — 실내 레이싱 (가이드맵 3번)']],
       /* 층별 배치 — 상황실 게시물(2026-08-01 촬영)에서 옮김. 비밀번호는 비공개 서버에만 있음 */
@@ -95,7 +95,7 @@ const MapData = (() => {
         ['식음', '셰프스키친(뷔페) · 라플레르(뷔페)'],
         ['놀이', 'K1 SPEED(B1) · 레전드 히어로즈 — 스크린 스포츠'],
         ['쇼핑', '굿앤굿스'], ['수건', '바스 · 일반 · 페이스타올 3종']] },
-    { id: 'C', name: '소노벨 C동 (파인)', short: '소노벨 C', art: 'belle', kind: 'stay', x: 602, y: 420, w: 78, h: 62, lv: 34, bld: 'C',
+    { id: 'C', name: '소노벨 C동 (파인)', short: '소노벨 C', art: 'belle', roomsUrl: 'https://www.sonohotelsresorts.com/belle_vp/roomsviewall', kind: 'stay', x: 602, y: 420, w: 78, h: 62, lv: 34, bld: 'C',
       info: ['앱에서 C · 파인동', '92.5㎡ · 침실 2 + 거실 + 주방 겸 식당 + 화장실 1 — A·B와 달리 화장실이 1개', '기본 5인 / 최대 8인'],
       stack: [
         ['12F', '객실 세미취사 · 식탁의자 원목(나우의자)', 'room'],
@@ -111,7 +111,7 @@ const MapData = (() => {
         ['2F', '객실 — 식탁의자 일룸/원목 구분 (223호 더블침대)', 'room'],
       ],
       items: [['컴퓨터', '3F · 11F'], ['세미취사', '9F~12F (오크동과 층이 다름)'], ['추가침구', '3F 창고에서 제작·보관'], ['수건', '일반타올만']] },
-    { id: 'B', name: '소노벨 B동 (오크)', short: '소노벨 B', art: 'belle', kind: 'stay', x: 710, y: 396, w: 78, h: 64, lv: 34, bld: 'B',
+    { id: 'B', name: '소노벨 B동 (오크)', short: '소노벨 B', art: 'belle', roomsUrl: 'https://www.sonohotelsresorts.com/belle_vp/roomsviewall', kind: 'stay', x: 710, y: 396, w: 78, h: 64, lv: 34, bld: 'B',
       info: ['앱에서 B · 오크동', '85.9㎡ · 침실 2 + 거실 + 주방 겸 식당 + 화장실 2', '기본 5인 / 최대 8인'],
       stack: [
         ['19~20F', '객실 클린 (취사 불가) · 전자레인지', 'room'],
@@ -132,10 +132,10 @@ const MapData = (() => {
       ],
       items: [['식음', '미채원 — 건강한 한식 전문점'], ['편의', '수유실'], ['정원', '홍송원 — 강원특별자치도 민간정원 1호'],
         ['객실 타입', '3~15F 취사 · 16~18F 세미취사 · 19~20F 클린(취사 불가)'], ['전자레인지', '16~20F'], ['수건', '일반타올만']] },
-    { id: 'A', name: '소노벨 A동 (체리)', short: '소노벨 A', art: 'belle', kind: 'stay', x: 816, y: 326, w: 78, h: 68, lv: 34, bld: 'A',
+    { id: 'A', name: '소노벨 A동 (체리)', short: '소노벨 A', art: 'belle', roomsUrl: 'https://www.sonohotelsresorts.com/belle_vp/roomsviewall', kind: 'stay', x: 816, y: 326, w: 78, h: 68, lv: 34, bld: 'A',
       info: ['앱에서 A · 체리동', '87.6㎡ · 침실 2 + 거실 + 주방 겸 식당 + 화장실 2', '기본 5인 / 최대 8인 · 취사/미취사 선택 · 파크뷰'],
       items: [['수건', '일반타올만']] },
-    { id: 'felice', name: '소노펠리체 비발디파크', short: '소노펠리체', kind: 'stay', x: 474, y: 604, w: 142, h: 52, lv: 20, art: 'felice',
+    { id: 'felice', name: '소노펠리체 비발디파크', short: '소노펠리체', roomsUrl: 'https://www.sonohotelsresorts.com/felice_vp/roomsviewall', kind: 'stay', x: 474, y: 604, w: 142, h: 52, lv: 20, art: 'felice',
       info: ['최상급 숙박동. 객실 등급 이름이 **노블리안**(실버·골드·로얄·프레지덴셜 스위트)', '중앙에 아치형 유리 아트리움, 그 앞이 산마르코광장 잔디정원',
         '전망이 층으로 갈린다 — **1~6층 산마르코광장 잔디정원 / 7층 이상 매봉산·오션월드**', '전 객실 취사/미취사 선택형이며 동(Tower)으로 갈린다'],
       floors: [['7~17F', '매봉산 · 오션월드 전망'], ['1~6F', '산마르코광장 잔디정원 전망']],
@@ -145,7 +145,7 @@ const MapData = (() => {
         ['로얄 스위트 오션', '199.14㎡ · 8인(최대 11인) · 침실2 + 온돌방 + 거실 + 주방 겸 식당 + 욕실 + 화장실 + **월풀 전용 공간** + 파우더룸 · 취사 Tower D / 미취사 Tower E'],
         ['그 외 타입', '실버·골드 캠핑테마 / 골드 게이밍룸 · 홈바룸 · 뷰프리 / 로얄 디럭스 단층·복층·홈바룸 / 로얄 펜트하우스 / 프레지덴셜 단층·복층·펜트하우스'],
         ['입퇴실', '15:00 / 11:00']] },
-    { id: 'village', name: '소노펠리체 빌리지', short: '펠리체 빌리지', kind: 'stay', x: 166, y: 610, w: 136, h: 48, lv: 14, art: 'village',
+    { id: 'village', name: '소노펠리체 빌리지', short: '펠리체 빌리지', roomsUrl: 'https://www.sonohotelsresorts.com/village_vp/roomsviewall', kind: 'stay', x: 166, y: 610, w: 136, h: 48, lv: 14, art: 'village',
       info: ['단지에서 떨어진 골프장 쪽 별도 구역 — 소노빌리지 입구까지 약 2.0km', '전망이 소노펠리체 컨트리클럽(골프장)과 매봉산·쇠뿔봉', '**반려동물 객실이 여기에도 있다** — 로얄 스위트 Pet Friendly / 펫 프라이빗'],
       items: [['동 구분', '취사 Village G·I / 미취사 Village E·F'],
         ['실버 스위트', '114.2~120.5㎡ · 6인(최대 9인) · 침실2 + 거실 + 주방 겸 식당 + 욕실 + 화장실 + **파우더룸 2개**'],

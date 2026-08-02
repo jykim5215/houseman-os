@@ -447,3 +447,90 @@ h3{letter-spacing:-.02em}
 #mapSvg .pl .side{filter:brightness(.68)}
 #mapSvg .pl{transition:opacity .18s ease,transform .16s var(--ease)}
 #mapSvg .pl:active{transform:translateY(-2px)}
+
+/* ══ 드릴다운: 건물 → 층 → 객실 → 실사 ══ */
+.drill{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column;
+  opacity:0;transform:translateY(14px);transition:opacity .24s var(--ease),transform .24s var(--ease)}
+.drill.open{opacity:1;transform:none}
+.dtop{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 12px 8px;flex:none;
+  border-bottom:2px solid var(--line)}
+.dtop [data-back] .ic{transform:rotate(90deg)}
+.dtop [data-close]{font-size:19px;font-weight:700}
+.dtitle{flex:1;min-width:0}
+.dtitle h3{font-size:16px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dtitle p{margin-top:1px}
+.dcrumb{flex:none;display:flex;align-items:center;gap:5px;overflow-x:auto;padding:8px 14px;scrollbar-width:none;
+  border-bottom:2px solid var(--line);background:var(--surface-2)}
+.dcrumb::-webkit-scrollbar{display:none}
+.dcrumb button{flex:none;font-size:11.5px;font-weight:700;color:var(--dim);padding:5px 11px;border-radius:999px;white-space:nowrap}
+.dcrumb button.on{background:var(--accent);color:var(--on-accent)}
+.dcrumb span{color:var(--dim);font-size:11px}
+.dstage{flex:1;min-height:0;position:relative;overflow:hidden}
+.dpage{position:absolute;inset:0;overflow:auto;padding:16px 18px calc(28px + env(safe-area-inset-bottom));
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  transition:transform .28s var(--ease),opacity .28s var(--ease);will-change:transform}
+.dpage.in-fwd{transform:translateX(26px);opacity:0}
+.dpage.in-back{transform:translateX(-26px);opacity:0}
+.dpage.here{transform:none;opacity:1}
+.dpage.out-fwd{transform:translateX(-26px);opacity:0;pointer-events:none}
+.dpage.out-back{transform:translateX(26px);opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.dpage{transition:opacity .18s linear}.dpage.in-fwd,.dpage.in-back{transform:none}}
+
+/* 건물 정면 */
+.facwrap{display:flex;justify-content:center;padding:6px 0 4px}
+.fac{width:100%;max-width:340px;height:auto}
+.fac .fl{cursor:pointer}
+.fac .fl .wall{transition:filter .15s ease}
+.fac .fl:active .wall{filter:brightness(1.1)}
+.fac .fl:focus{outline:none}
+.fac .fl:focus-visible .wall{stroke:var(--accent);stroke-width:3}
+.fac .fnum{font-size:11px;font-weight:800;fill:var(--text-2);text-anchor:end;font-family:inherit}
+.fac .badge{fill:var(--danger)}
+.fac .bnum{font-size:10px;font-weight:800;fill:#fff;text-anchor:middle;font-family:inherit}
+.fac .k-store .wall,.fac .k-linen .wall{filter:saturate(.6)}
+
+/* 섹션 */
+.dsec{margin-bottom:18px}
+.dh{font-size:11.5px;font-weight:800;color:var(--dim);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.dh .cnt{background:var(--accent-bg);color:var(--accent);border-radius:999px;padding:2px 9px;font-size:11px}
+.dbox{border:2px solid var(--line-strong);border-left-width:6px;border-radius:var(--r-md);padding:12px 14px;
+  font-size:13.5px;line-height:1.6;background:var(--surface);color:var(--text-2)}
+.dbox.k-store{border-left-color:#6f9a5f} .dbox.k-linen{border-left-color:#5b86a0}
+.dbox.k-pet{border-left-color:#a86286} .dbox.k-warn{border-left-color:var(--warn);color:var(--warn);font-weight:600}
+.dbox.k-room{border-left-color:var(--accent)} .dbox.k-util{border-left-color:var(--dim)}
+.dchips{display:flex;flex-wrap:wrap;gap:6px}
+.dchip{font-size:12px;font-weight:700;padding:6px 12px;border-radius:999px;background:var(--surface-2);color:var(--text-2)}
+.dchip.on{background:var(--accent);color:var(--on-accent)}
+.dempty{border:2px dashed var(--line-strong);border-radius:var(--r-md);padding:16px;font-size:12.5px;
+  color:var(--dim);line-height:1.65;text-align:center}
+.dnote{font-size:11px;color:var(--dim);line-height:1.55;margin-top:6px}
+.dlive .lv,.lv{border-radius:var(--r-sm);padding:9px 12px;font-size:12.5px;line-height:1.55;margin-bottom:6px}
+.lv.bad{background:var(--danger-bg);color:var(--danger)}
+.lv.warn{background:var(--warn-bg);color:var(--warn)}
+
+/* 객실 배치 */
+.rmgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.rmcard{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;
+  border:2px solid var(--line-strong);border-radius:var(--r-md);background:var(--surface);
+  padding:10px 11px;min-height:64px;transition:transform .12s var(--ease),border-color .15s ease}
+.rmcard:active{transform:scale(.96);border-color:var(--accent)}
+.rmcard .no{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text)}
+.rmcard .tg{display:flex;flex-wrap:wrap;gap:3px}
+.rmcard .tg i,.dtag{font-style:normal}
+.rmcard .tg i{font-size:9.5px;font-weight:700;padding:2px 6px;border-radius:999px;background:var(--surface-2);color:var(--dim)}
+.tg i.t-warn,.dtag.t-warn{background:var(--warn-bg);color:var(--warn)}
+.tg i.t-bad,.dtag.t-bad{background:var(--danger-bg);color:var(--danger)}
+.tg i.t-info,.dtag.t-info{background:var(--accent-bg);color:var(--accent)}
+.tg i.t-note,.dtag.t-note{background:var(--surface-3);color:var(--text-2)}
+
+/* 객실 상세 */
+.rmhead{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.rmno{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.rmmeta{flex:1;min-width:0;font-size:13px;font-weight:700}
+.rmstate{flex:none;font-size:11px;font-weight:800;padding:6px 11px;border-radius:999px}
+.rmstate.s-ok{background:var(--ok-bg);color:var(--ok)}
+.rmstate.s-warn{background:var(--warn-bg);color:var(--warn)}
+.rmstate.s-bad{background:var(--danger-bg);color:var(--danger)}
+.dtags{display:flex;flex-direction:column;gap:7px}
+.dtag{border-radius:var(--r-sm);padding:9px 12px;font-size:12.5px;line-height:1.55}
+.dtag span{display:block;opacity:.85;margin-top:2px;font-size:11.5px}

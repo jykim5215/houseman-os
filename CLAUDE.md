@@ -22,6 +22,8 @@ docs/            ← Pages 배포 루트 (이 폴더가 곧 앱)
   ai.js          LLM provider 추상화 (Gemini/Claude/OpenAI)
   mapdata.js     비발디파크 시설 지도 데이터 (공식홈 시설·식음·객실 + 가이드맵 범례 근거)
   illust.js      시설 일러스트 SVG (실제 건물 사진을 보고 특징만 뽑아 직접 그린 원본)
+  roomdata.js    객실 단위 정보 (현장 게시물·업무 카드에서 확인된 것만)
+  drill.js       건물→층→객실→실사 드릴다운 화면
   team.json      팀 코드 봉인 blob (암호문 — 평문 토큰 없음)
   sw.js / manifest.webmanifest / version.json / icon-*.png
 project/         ← 설계 문서 (HANDOFF/DATA_MODEL/UI_CANDIDATES). 배포되지 않음
@@ -66,4 +68,6 @@ git add -A && git commit -m "..." && git push
 - 챗 답변은 **묻는 것만** 짧게. 항목이 여럿이면 표/불릿으로 정리.
 - **챗은 동을 미리 고르지 않는다.** 질문에 동이 있으면 좁히고 없으면 전 동에서 찾되 어느 동인지 밝힌다. 단 데이터를 **수정**할 때 대상 동이 불명확하면 되묻는다.
 - 지도 좌표는 실측이 아닌 개념도다. 시설 정보를 추가할 때는 반드시 공식홈 등 출처를 확인하고 **추측으로 채우지 않는다**. 못 찾으면 '미확보'로 남기고 프런트 이관 문구를 넣는다.
+- 화면 등장 클래스는 `requestAnimationFrame`이 아니라 `setTimeout`으로 건다. 합성이 멈춘 탭에서 rAF가 지연돼 화면이 안 뜬 전례가 두 번 있다(바텀시트·드릴다운).
+- 객실 실사 사진은 앱에 싣지 않고 공식 페이지를 연다(`roomsUrl`).
 - 일러스트는 **직접 그린 SVG만** 쓴다. 공식 사진·가이드맵 그림은 참고만 하고 앱에 넣지 않는다. `Illust.svg()`에는 `xmlns`가 있어야 data: URL로도 쓸 수 있다.

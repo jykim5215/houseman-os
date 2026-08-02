@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.9.3';
+const APP_VERSION = '0.10.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -766,8 +766,11 @@ function placeSheet(id) {
     ${stackBox}
     ${bullets ? `<ul class="plinfo">${bullets}</ul>` : ''}
     ${rows ? `<table class="pltab">${rows}</table>` : ''}
-    ${p.bld ? `<div class="foot"><button class="btn filled" data-ask style="width:100%">이 동 자료 챗에서 보기</button></div>` : ''}
+    ${(p.bld || (p.floors || []).length || stack) ? `<div class="foot"><button class="btn filled" data-drill style="width:100%">층·객실 들어가 보기</button></div>` : ''}
+    ${p.bld ? `<div class="foot"><button class="btn" data-ask style="width:100%">이 동 자료 챗에서 보기</button></div>` : ''}
     <p class="meta" style="margin-top:10px">출처: 소노 공식홈 시설·식음 안내 및 공식 가이드맵 범례 (2026-08-01 수집). 운영시간·요금은 변동이 크니 확정 안내는 프런트·1588-4888로 확인하세요.</p>`);
+  const db2 = $('#sheetBody [data-drill]');
+  if (db2) db2.onclick = () => { closeSheet(); setTimeout(() => Drill.open(p.id), 180); };
   const ab = $('#sheetBody [data-ask]');
   if (ab) ab.onclick = () => { closeSheet(); go('chat'); send(`${p.name} 안내`); };
 }
