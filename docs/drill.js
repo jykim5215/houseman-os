@@ -82,82 +82,167 @@ const Drill = (() => {
   }
 
   /* ── 화면들 ── */
-  /* 루트: 층 자료가 있으면 정면(층 선택), 없으면 구역 목록, 그것도 없으면 안내 */
+  /* 루트 화면은 시설 성격에 따라 완전히 다르게 짠다.
+     resort 층·객실 / hotel 객실기준 / pet 반려동물 규정 / estate 동·등급표
+     waterpark 준비물·금지 / ski 이용 흐름 / mall 카테고리 / dining 업장 / help 한 장 정보 */
+  const pick = (keys) => (bld.items || []).filter(([k]) => keys.some((x) => k.includes(x)));
+  const restOf = (used) => (bld.items || []).filter(([k]) => !used.some(([u]) => u === k));
+  const tbl = (rows) => rows.length ? `<table class="pltab">${rows.map(([k, v]) => `<tr><th>${E(k)}</th><td>${B(v)}</td></tr>`).join('')}</table>` : '';
+  const chips = (arr) => `<div class="dchips">${arr.map((x) => `<span class="dchip">${E(x)}</span>`).join('')}</div>`;
+  const split = (v) => String(v).split(/\s·\s|\s\|\s|\s\/\s/).map((x) => x.trim()).filter(Boolean);
+  const rules = (list, tone) => `<ul class="rulelist ${tone || ''}">${list.map((t) => `<li>${B(t)}</li>`).join('')}</ul>`;
+  const hero = () => `<div class="plart">${Illust.svg(bld.art)}</div>`;
+  const openBtn = (txt) => bld.roomsUrl ? `<div class="foot"><button class="btn" data-open style="width:100%">${E(txt)}</button></div>` : '';
+  const bindOpen = (root) => { const o = root.querySelector('[data-open]'); if (o) o.onclick = () => window.open(bld.roomsUrl, '_blank', 'noopener'); };
+  const floorCards = (rows) => `<div class="zgrid">${rows.map((r, i) => `<button class="zcard" data-f="${i}"><span class="zk">${E(r[0])}</span><span class="zv">${B(r[1])}</span><span class="zn">›</span></button>`).join('')}</div>`;
+
   function viewFacade() {
+    const L = bld.layout || 'help';
     const rows = floorRows(bld);
-    if (rows.length) return facadeView(rows);
-    const items = bld.items || [];
-    if (items.length) return zoneView(items);
-    return blankView();
+    if (L === 'resort' && rows.length) return facadeView(rows);
+    if (L === 'hotel') return hotelView(rows);
+    if (L === 'pet') return petView();
+    if (L === 'estate') return estateView();
+    if (L === 'waterpark') return waterView();
+    if (L === 'ski') return skiView(rows);
+    if (L === 'mall') return mallView();
+    if (L === 'dining') return diningView();
+    if (L === 'outdoorzone' || L === 'help' || L === 'stayinfo') return helpView();
+    return rows.length ? facadeView(rows) : ((bld.items || []).length ? mallView() : blankView());
   }
 
-  function facadeView(rows) {
+  /* 호텔 — 층은 단순(2~9F 객실). 리조트와 뭐가 다른지가 핵심 */
+  function hotelView(rows) {
     return {
-      title: bld.name, sub: W().floors,
-      html: `<div class="facwrap">${facade(bld)}</div>
-        <p class="dnote">건물 정면은 실제 사진의 특징(형태·색·중앙 띠)을 따라 그린 그림입니다.${isStay() ? ' 층 오른쪽 숫자는 <b>신경 쓸 객실 수</b>입니다.' : ''}</p>
-        ${infoBlock()}`,
+      title: bld.name, sub: '호텔형 · 미취사',
+      html: `${hero()}
+        <div class="keyrow"><div class="key"><b>2~9F</b><span>객실</span></div>
+          <div class="key"><b>2인</b><span>정원 (최대 4)</span></div>
+          <div class="key"><b>46.62㎡</b><span>침실+화장실</span></div></div>
+        <div class="dsec"><div class="dh">리조트와 다른 점</div>
+          ${rules(['**칫솔·치약·헤어빗·컨디셔너가 나옵니다** — 리조트 객실에는 없습니다', '**미니바 무료**', '취사 불가 — 전기포트·컵·접시·포크만'], 'ok')}</div>
+        ${tbl(pick(['비품', '수건']))}
+        <div class="dsec"><div class="dh">층</div>${floorCards(rows)}</div>
+        ${openBtn('공식 객실 정보 보기')}`,
       bind(root, push) {
-        root.querySelectorAll('.fac .fl').forEach((g) => {
-          const go = () => push(viewFloor(rows[+g.dataset.i]));
-          g.addEventListener('click', go);
-          g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
-        });
+        root.querySelectorAll('[data-f]').forEach((b2) => b2.onclick = () => push(viewFloor(rows[+b2.dataset.f])));
+        bindOpen(root);
       },
     };
   }
 
-  /* 구역 목록 — 층 자료가 없는 시설은 '무엇이 어디에'를 종류별로 보여준다 */
-  function zoneView(items) {
-    const w = W();
-    const card = (it, i) => {
-      const n = String(it[1]).split(/\s·\s|\s\|\s/).filter(Boolean).length;
-      return `<button class="zcard" data-z="${i}">
-        <span class="zk">${E(it[0])}</span>
-        <span class="zv">${B(it[1])}</span>
-        <span class="zn">${n}개</span></button>`;
-    };
+  /* 소노펫 — 반려동물 규정이 가장 먼저 */
+  function petView() {
+    const rl = (bld.info || []).filter((t) => /반려|접종|매너벨트|리드줄|45kg/.test(t));
+    const others = (bld.info || []).filter((t) => rl.indexOf(t) < 0);
+    const roomItem = pick(['객실'])[0];
     return {
-      title: bld.name, sub: `${w.plan} ${items.length}구역`,
-      html: `<div class="plart">${Illust.svg(bld.art)}</div>
-        <div class="dsec"><div class="dh">${w.plan}</div>
-          <div class="zgrid">${items.map(card).join('')}</div></div>
-        ${infoBlock()}
-        <p class="dnote">이 시설은 <b>층별 자료가 아직 없습니다.</b> 확인된 구성만 종류별로 정리했습니다. 층 배분은 확인 전이라 임의로 나누지 않았습니다.</p>
-        ${bld.roomsUrl ? `<div class="foot"><button class="btn" data-open style="width:100%">공식 페이지 열기</button></div>` : ''}`,
-      bind(root, push) {
-        root.querySelectorAll('[data-z]').forEach((b2) => b2.onclick = () => push(viewZone(items[+b2.dataset.z])));
-        const o = root.querySelector('[data-open]');
-        if (o) o.onclick = () => window.open(bld.roomsUrl, '_blank', 'noopener');
-      },
+      title: bld.name, sub: '반려동물 동반 숙박',
+      html: `${hero()}
+        <div class="dsec"><div class="dh">입실 전 반드시 확인</div>${rules(rl, 'warn')}</div>
+        ${roomItem ? `<div class="dsec"><div class="dh">객실 등급</div>${chips(split(roomItem[1]))}</div>` : ''}
+        ${tbl(pick(['부대', '야외', '수건']))}
+        ${others.length ? `<div class="dsec"><div class="dh">참고</div>${rules(others)}</div>` : ''}
+        ${openBtn('공식 객실 정보 보기')}`,
+      bind: bindOpen,
     };
   }
 
-  function viewZone(it) {
-    const parts = String(it[1]).split(/\s·\s|\s\|\s/).map((x) => x.trim()).filter(Boolean);
+  /* 소노펠리체 · 빌리지 — 동(Tower/Village) 구성과 등급별 평수가 핵심 */
+  function estateView() {
+    const towers = pick(['동 구분']);
+    const grades = (bld.items || []).filter(([k]) => /스위트|타입|펫 객실/.test(k));
+    const other = restOf(towers.concat(grades));
     return {
-      title: it[0], sub: bld.name,
-      html: `<div class="dsec"><div class="dh">${E(it[0])} · ${parts.length}개</div>
-          <div class="zlist">${parts.map((x) => `<div class="zrow">${B(x)}</div>`).join('')}</div></div>
-        ${bld.roomsUrl ? `<div class="foot"><button class="btn" data-open style="width:100%">공식 페이지에서 보기</button></div>` : ''}`,
-      bind(root) { const o = root.querySelector('[data-open]'); if (o) o.onclick = () => window.open(bld.roomsUrl, '_blank', 'noopener'); },
+      title: bld.name, sub: '동 구성 · 객실 등급',
+      html: `${hero()}
+        ${towers.length ? `<div class="dsec"><div class="dh">취사 / 미취사는 동으로 갈립니다</div>
+          <div class="towerbox">${split(towers[0][1]).map((t) => `<div class="tw ${/미취사/.test(t) ? 'no' : 'yes'}">${E(t)}</div>`).join('')}</div></div>` : ''}
+        ${grades.length ? `<div class="dsec"><div class="dh">등급별</div>
+          <div class="gradelist">${grades.map(([k, v]) => `<div class="grade"><div class="gk">${E(k)}</div><div class="gv">${B(v)}</div></div>`).join('')}</div></div>` : ''}
+        ${(bld.floors || []).length ? `<div class="dsec"><div class="dh">전망은 층으로 갈립니다</div>
+          <div class="floors">${(bld.floors).map(([f, v]) => `<div class="flrow"><span class="fl">${E(f)}</span><span>${B(v)}</span></div>`).join('')}</div></div>` : ''}
+        ${tbl(other)}
+        ${openBtn('공식 객실 정보 보기')}`,
+      bind: bindOpen,
     };
   }
 
-  function blankView() {
-    return {
-      title: bld.name, sub: '자료 미확보',
-      html: `<div class="plart">${Illust.svg(bld.art)}</div>
-        ${infoBlock()}
-        <div class="dempty">이 시설은 <b>층·구역 자료가 아직 없습니다.</b><br>확인된 내용만 넣는 원칙이라 비워 뒀습니다. 현장 자료를 주시면 바로 채웁니다.</div>`,
-    };
-  }
-
-  function infoBlock() {
+  /* 오션월드 — 준비물과 금지사항이 먼저. 손님 문의 1순위 */
+  function waterView() {
     const info = bld.info || [];
-    if (!info.length) return '';
-    return `<div class="dsec"><div class="dh">알아둘 것</div>
-      <ul class="plinfo">${info.map((t) => `<li${/^⚠/.test(t) ? ' class="warn"' : ''}>${B(t)}</li>`).join('')}</ul></div>`;
+    const must = info.filter((t) => /필수|의무/.test(t));
+    const no = info.filter((t) => must.indexOf(t) < 0 && /금지|불가|없음/.test(t));
+    const etc = info.filter((t) => must.indexOf(t) < 0 && no.indexOf(t) < 0);
+    return {
+      title: bld.name, sub: '워터파크',
+      html: `${hero()}
+        <div class="dsec"><div class="dh">꼭 챙겨야 할 것</div>${rules(must, 'ok')}</div>
+        <div class="dsec"><div class="dh">안 되는 것</div>${rules(no, 'bad')}</div>
+        <div class="dsec"><div class="dh">대여 · 요금 기준</div>${tbl(bld.items || [])}</div>
+        ${etc.length ? `<div class="dsec"><div class="dh">그 밖에</div>${rules(etc)}</div>` : ''}`,
+    };
+  }
+
+  /* 스키월드 계열 — 이용 흐름(순서)이 핵심 */
+  function skiView(rows) {
+    const steps = bld.id === 'snowy'
+      ? ['메인센터 1층에서 입장권 구매', '메인센터 2층 전용 곤돌라 탑승', '곤돌라로 올라가면 외출 불가']
+      : bld.id === 'main' ? ['1층 매표소에서 리프트권 · 장비 렌탈', '장비 받고 슬로프로', '2층은 스노위랜드 전용 곤돌라']
+        : [];
+    return {
+      title: bld.name, sub: bld.id === 'ski' ? '슬로프 10면' : '스키월드',
+      html: `${hero()}
+        ${steps.length ? `<div class="dsec"><div class="dh">이용 순서</div>
+          <ol class="steps">${steps.map((t) => `<li>${E(t)}</li>`).join('')}</ol></div>` : ''}
+        <div class="dsec"><div class="dh">알아둘 것</div>${rules(bld.info || [], 'warn')}</div>
+        ${(bld.items || []).length ? `<div class="dsec"><div class="dh">시설</div>${tbl(bld.items)}</div>` : ''}
+        ${rows.length ? `<div class="dsec"><div class="dh">층</div>${floorCards(rows)}</div>` : ''}`,
+      bind(root, push) { root.querySelectorAll('[data-f]').forEach((b2) => b2.onclick = () => push(viewFloor(rows[+b2.dataset.f]))); },
+    };
+  }
+
+  /* 비바 플렉스 몰 — 한 층뿐이라 층 단계 없음. 카테고리로 바로 */
+  function mallView() {
+    const items = bld.items || [];
+    const ICON = { 놀이: '🎳', 가족: '🎠', 휴식: '♨️', 편의: '💊', 쇼핑: '🛍️', 푸드코트: '🍜', 식당: '🍽️' };
+    return {
+      title: bld.name, sub: bld.oneFloor ? `${bld.oneFloor} · 한 층에 전부` : '구역',
+      html: `${hero()}
+        ${bld.oneFloor ? `<div class="oneline">이 시설은 <b>${E(bld.oneFloor)}</b> 한 층입니다. 층 구분 없이 구역만 찾으면 됩니다.</div>` : ''}
+        <div class="dsec"><div class="dh">무엇을 찾으세요?</div>
+          <div class="catgrid">${items.map((it, i) => `<button class="cat" data-z="${i}">
+            <span class="ci">${ICON[it[0]] || '📍'}</span><span class="ck">${E(it[0])}</span>
+            <span class="cn">${split(it[1]).length}</span></button>`).join('')}</div></div>
+        ${(bld.info || []).length ? `<div class="dsec"><div class="dh">참고</div>${rules(bld.info)}</div>` : ''}`,
+      bind(root, push) { root.querySelectorAll('[data-z]').forEach((b2) => b2.onclick = () => push(viewZone(items[+b2.dataset.z]))); },
+    };
+  }
+
+  /* 식음 — 업장 카드 */
+  function diningView() {
+    const items = bld.items || [];
+    return {
+      title: bld.name, sub: '식음업장',
+      html: `${hero()}
+        ${items.length ? `<div class="dsec"><div class="dh">업장</div>
+          <div class="zgrid">${items.map(([k, v]) => `<div class="zcard static"><span class="zk">${E(k)}</span><span class="zv">${B(v)}</span></div>`).join('')}</div></div>` : ''}
+        ${(bld.info || []).length ? `<div class="dsec"><div class="dh">안내</div>${rules(bld.info)}</div>` : ''}
+        <p class="dnote">운영시간·휴무는 변동이 커서 넣지 않았습니다. 확정 안내는 프런트 또는 1588-4888.</p>`,
+    };
+  }
+
+  /* 편의·교통·야외 구역 — 한 장짜리 정보 카드 */
+  function helpView() {
+    const items = bld.items || [];
+    const info = bld.info || [];
+    return {
+      title: bld.name, sub: MapData.KINDS[bld.kind].ko,
+      html: `${hero()}
+        ${info.length ? `<div class="dsec">${rules(info)}</div>` : ''}
+        ${items.length ? tbl(items) : ''}
+        ${!info.length && !items.length ? `<div class="dempty">확인된 자료가 없습니다.</div>` : ''}`,
+    };
   }
 
   function viewFloor(row) {
