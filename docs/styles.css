@@ -699,3 +699,35 @@ h3{letter-spacing:-.02em}
 .plan .zn .zf{fill:var(--surface-2);stroke:var(--text);stroke-width:2.5}
 .plan .zn .zt{font-size:12.5px;font-weight:800;text-anchor:middle;font-family:inherit;fill:var(--text-2)}
 .plan .zn .zt.sm{font-size:11px;font-weight:700;fill:var(--dim)}
+
+/* ══ 시작 화면 ══ */
+.splash{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:0;
+  background:radial-gradient(120% 90% at 50% 34%,#9a5f2c 0%,#7a4a22 46%,#5f3a19 100%);
+  transition:opacity .42s var(--ease),transform .42s var(--ease)}
+.splash.gone{opacity:0;transform:scale(1.04);pointer-events:none}
+.sp-mark{width:118px;height:118px;opacity:0;transform:scale(.86) translateY(8px);
+  animation:spIn .68s cubic-bezier(.22,.9,.3,1) .06s both}
+.sp-mark svg{width:100%;height:100%;overflow:visible;
+  filter:drop-shadow(0 10px 26px rgba(0,0,0,.32))}
+.sp-peak{opacity:0;transform-origin:60px 82px;animation:spRise .62s cubic-bezier(.22,.9,.3,1) .16s both}
+.sp-snow{opacity:0;animation:spFade .5s ease .46s both}
+.sp-wave{stroke-dasharray:120;stroke-dashoffset:120;animation:spDraw .72s cubic-bezier(.3,.9,.35,1) .5s both}
+.sp-name{margin-top:22px;font-size:21px;font-weight:800;letter-spacing:-.03em;color:#fdf3e4;
+  opacity:0;animation:spUp .5s var(--ease) .42s both}
+.sp-sub{margin-top:5px;font-size:12px;font-weight:700;letter-spacing:.24em;color:#e2c49c;
+  opacity:0;animation:spUp .5s var(--ease) .54s both}
+.sp-bar{margin-top:30px;width:112px;height:3px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden;
+  opacity:0;animation:spFade .4s ease .66s both}
+.sp-bar i{display:block;height:100%;width:40%;border-radius:99px;
+  background:linear-gradient(90deg,#8fc63d,#d9e04a);animation:spSlide 1.15s cubic-bezier(.5,0,.5,1) .72s infinite}
+@keyframes spIn{to{opacity:1;transform:none}}
+@keyframes spRise{from{opacity:0;transform:scaleY(.6)}to{opacity:1;transform:none}}
+@keyframes spFade{to{opacity:1}}
+@keyframes spDraw{to{stroke-dashoffset:0}}
+@keyframes spUp{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+@keyframes spSlide{0%{transform:translateX(-110%)}100%{transform:translateX(290%)}}
+@media (prefers-reduced-motion:reduce){
+  .sp-mark,.sp-peak,.sp-snow,.sp-wave,.sp-name,.sp-sub,.sp-bar{animation:none;opacity:1;transform:none;stroke-dashoffset:0}
+  .splash{transition:opacity .2s linear}
+}

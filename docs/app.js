@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.13.0';
+const APP_VERSION = '0.14.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -821,12 +821,20 @@ setInterval(async () => { try { const r = await fetch('version.json?t=' + Date.n
 $('#updGo').onclick = async () => { if ('serviceWorker' in navigator) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.update())); } if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } location.reload(); };
 
 /* ── 시작: 연결(팀 코드) → 로그인 → 앱 ── */
+const SPLASH_AT = Date.now();
+function hideSplash() {
+  const el = document.getElementById('splash'); if (!el || el.dataset.done) return;
+  el.dataset.done = '1';
+  const wait = Math.max(0, 900 - (Date.now() - SPLASH_AT));   // 너무 빨리 사라져 깜빡이지 않게
+  setTimeout(() => { el.classList.add('gone'); setTimeout(() => el.remove(), 460); }, wait);
+}
 (function boot() {
   const th = localStorage.getItem('hos.theme'); if (th) { document.documentElement.dataset.theme = th; document.querySelector('meta[name=theme-color]').content = th === 'dark' ? '#1a1410' : '#f7f1e5'; }
   Store.load(); renderBld();
   setMode('ask'); renderCounters(); renderQuick(); refreshHead();
   $('#bldBtn').classList.add('hide'); $('#appTitle').classList.remove('hide'); // 시작 탭이 챗
   Store.Sync.onStatus(() => refreshHead()); Store.Sync.onChange(() => refreshAll()); Store.Sync.start();
+  hideSplash();
   const u = me();
   if (Store.Sync.cfg) { // 이미 연결됨
     if (u) { $('#workerChip').textContent = u.name + (u.role === 'admin' ? ' ·관리' : ''); briefingCard(); }
@@ -842,3 +850,4 @@ $('#updGo').onclick = async () => { if ('serviceWorker' in navigator) { const rs
     else showLogin();
   });
 })();
+setTimeout(hideSplash, 4000);   // 안전장치 — 무슨 일이 있어도 시작 화면에 갇히지 않는다

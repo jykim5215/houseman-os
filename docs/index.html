@@ -9,6 +9,9 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="하우스맨 노트">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -54,6 +57,34 @@
   <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4.5 3.5 6.8v13l5.5-2.3 6 2.3 5.5-2.3v-13L15 6.8z M9 4.5v13M15 6.8v13"/></symbol>
   <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.5 6.5a4.5 4.5 0 0 0-6 6L4 17l3 3 4.5-4.5a4.5 4.5 0 0 0 6-6L14 13l-2.5-2.5z"/></symbol>
 </defs></svg>
+
+
+<!-- 시작 화면 — 부팅이 끝나면 사라진다 -->
+<div id="splash" class="splash">
+  <div class="sp-mark">
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <defs><linearGradient id="spk" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0" stop-color="#4e9c3f"/><stop offset=".55" stop-color="#8fc63d"/><stop offset="1" stop-color="#d9e04a"/>
+      </linearGradient></defs>
+      <path class="sp-peak" d="M60 22 L96 82 H24 Z" fill="url(#spk)"/>
+      <path class="sp-snow" d="M60 22 L78 52 L60 64 L42 52 Z" fill="#fffdf6" fill-opacity=".92"/>
+      <path class="sp-wave" d="M20 96 c11 0 11 -7 22 0 s11 7 22 0 11 -7 22 0 11 7 16 0"
+        stroke="#f0dcc0" stroke-width="5" fill="none" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div class="sp-name">하우스맨 노트</div>
+  <div class="sp-sub">비발디파크</div>
+  <div class="sp-bar"><i></i></div>
+</div>
+<script>
+/* app.js가 로드/파싱에 실패해도 시작 화면에 갇히지 않게 하는 독립 안전장치 */
+setTimeout(function () {
+  var e = document.getElementById('splash');
+  if (!e || e.dataset.done) return;
+  e.dataset.done = '1'; e.classList.add('gone');
+  setTimeout(function () { if (e.parentNode) e.parentNode.removeChild(e); }, 460);
+}, 5000);
+</script>
 
 <div class="updbar hide" id="updBar">새 버전이 있습니다 <button id="updGo">지금 업데이트</button></div>
 
