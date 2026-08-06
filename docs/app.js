@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.15.0';
+const APP_VERSION = '0.16.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -646,6 +646,10 @@ function applySharedAI() {
 function refreshAll() { applySharedAI(); renderCounters(); if ($('#tab-data').classList.contains('on')) renderData(); if ($('#tab-talk').classList.contains('on')) renderFeed(); renderQuick(); refreshHead(); }
 
 /* ── 탭 ── */
+$('#faqBtn').onclick = () => Panels.faq();
+$('#boardBtn').onclick = () => { Store.ensureRooms(); Panels.board(); };
+$('#calcBtn').onclick = () => Panels.calc();
+
 /* ── 지도 ── */
 const mapState = { kind: 'all', k: 1.9, tx: 0, ty: 0, built: false, sel: null };
 function mapSvg() {
