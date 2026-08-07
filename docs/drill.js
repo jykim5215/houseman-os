@@ -91,7 +91,88 @@ const Drill = (() => {
   const chips = (arr) => `<div class="dchips">${arr.map((x) => `<span class="dchip">${E(x)}</span>`).join('')}</div>`;
   const split = (v) => String(v).split(/\s·\s|\s\|\s|\s\/\s/).map((x) => x.trim()).filter(Boolean);
   const rules = (list, tone) => `<ul class="rulelist ${tone || ''}">${list.map((t) => `<li>${B(t)}</li>`).join('')}</ul>`;
-  const hero = () => `<div class="plart">${Illust.svg(bld.art)}</div>`;
+  /* 사진이 있으면 실사를, 없으면 일러스트를. 사진은 비공개 저장소에서 받아온다. */
+  const hero = () => `<div class="plart" id="heroBox" data-place="${E(bld.id)}">${Illust.svg(bld.art)}</div>
+    <div class="heroctl"><span class="hnote" id="hNote">직접 그린 그림</span>
+      <button class="btn sm" data-addphoto>사진 추가</button></div>`;
+
+  /* 화면이 그려진 뒤 사진을 붙인다(있으면) */
+  async function fillHero(root) {
+    const box = root.querySelector('#heroBox'); if (!box) return;
+    const id = box.dataset.place;
+    const P = Store.Sync.photos;
+    if (!P.ready()) { const n = root.querySelector('#hNote'); if (n) n.textContent = '직접 그린 그림 · 사진은 팀 서버 연결 후'; return; }
+    const list = await P.list(id);
+    if (!list.length) return;
+    const urls = [];
+    for (const f of list.slice(0, 8)) { const u = await P.load(f); if (u) urls.push({ u, f }); }
+    if (!urls.length || !root.isConnected) return;
+    box.classList.add('hasphoto');
+    box.innerHTML = `<div class="hrail">${urls.map(({ u }, i) => `<img src="${u}" alt="" loading="lazy" data-i="${i}">`).join('')}</div>
+      ${urls.length > 1 ? `<div class="hdots">${urls.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}`;
+    const note = root.querySelector('#hNote'); if (note) note.textContent = `사진 ${urls.length}장 · 비공개 서버`;
+    const rail = box.querySelector('.hrail');
+    rail.addEventListener('scroll', () => {
+      const i = Math.round(rail.scrollLeft / rail.clientWidth);
+      box.querySelectorAll('.hdots i').forEach((d, n2) => d.classList.toggle('on', n2 === i));
+    }, { passive: true });
+    box.querySelectorAll('img').forEach((im) => im.onclick = () => viewer(urls.map((x) => x.u), +im.dataset.i));
+  }
+
+  function viewer(urls, start) {
+    const v = document.createElement('div');
+    v.className = 'photoview';
+    v.innerHTML = `<button class="pvclose" aria-label="닫기">✕</button>
+      <div class="pvrail">${urls.map((u) => `<img src="${u}" alt="">`).join('')}</div>`;
+    document.body.appendChild(v);
+    setTimeout(() => { v.classList.add('on'); const r = v.querySelector('.pvrail'); r.scrollLeft = r.clientWidth * (start || 0); }, 10);
+    const kill = () => { v.classList.remove('on'); setTimeout(() => v.remove(), 220); };
+    v.querySelector('.pvclose').onclick = kill;
+    v.addEventListener('click', (e) => { if (e.target === v) kill(); });
+  }
+
+  /* 사진 고르기 → 긴 변 1600px로 줄여 JPEG로 → 비공개 저장소 업로드 */
+  function addPhoto(root) {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
+    inp.onchange = async () => {
+      const files = [...(inp.files || [])]; if (!files.length) return;
+      const note = root.querySelector('#hNote');
+      const placeId = bld.id;
+      try {
+        for (let i = 0; i < files.length; i++) {
+          if (note) note.textContent = `올리는 중 ${i + 1}/${files.length}…`;
+          const b64 = await shrink(files[i]);
+          const name = `${Date.now().toString(36)}${i}.jpg`;
+          await Store.Sync.photos.upload(placeId, name, b64);
+        }
+        if (note) note.textContent = '올렸습니다';
+        Store.Sync.photos.forget(placeId);
+        await fillHero(root);
+      } catch (e) { if (note) note.textContent = e.message; alert(e.message); }
+    };
+    inp.click();
+  }
+  function shrink(file) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const im = new Image();
+        im.onload = () => {
+          const max = 1600, sc = Math.min(1, max / Math.max(im.width, im.height));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(im.width * sc); cv.height = Math.round(im.height * sc);
+          cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+          res(cv.toDataURL('image/jpeg', 0.82).split(',')[1]);
+        };
+        im.onerror = () => rej(new Error('이미지를 읽지 못했습니다'));
+        im.src = fr.result;
+      };
+      fr.onerror = () => rej(new Error('파일을 읽지 못했습니다'));
+      fr.readAsDataURL(file);
+    });
+  }
+
   const openBtn = (txt) => bld.roomsUrl ? `<div class="foot"><button class="btn" data-open style="width:100%">${E(txt)}</button></div>` : '';
   const bindOpen = (root) => { const o = root.querySelector('[data-open]'); if (o) o.onclick = () => window.open(bld.roomsUrl, '_blank', 'noopener'); };
   const floorCards = (rows) => `<div class="zgrid">${rows.map((r, i) => `<button class="zcard" data-f="${i}"><span class="zk">${E(r[0])}</span><span class="zv">${B(r[1])}</span><span class="zn">›</span></button>`).join('')}</div>`;
@@ -109,6 +190,52 @@ const Drill = (() => {
     if (L === 'dining') return diningView();
     if (L === 'outdoorzone' || L === 'help' || L === 'stayinfo') return helpView();
     return rows.length ? facadeView(rows) : ((bld.items || []).length ? mallView() : blankView());
+  }
+
+
+  /* 리조트 동 — 정면에서 층 선택 */
+  function facadeView(rows) {
+    return {
+      title: bld.name, sub: W().floors,
+      html: `<div class="facwrap">${facade(bld)}</div>
+        ${hero()}
+        <p class="dnote">건물 정면은 실제 사진의 특징(형태·색·중앙 띠)을 따라 그린 그림입니다.${isStay() ? ' 층 오른쪽 숫자는 <b>신경 쓸 객실 수</b>입니다.' : ''}</p>
+        ${infoBlock()}`,
+      bind(root, push) {
+        root.querySelectorAll('.fac .fl').forEach((g) => {
+          const go = () => push(viewFloor(rows[+g.dataset.i]));
+          g.addEventListener('click', go);
+          g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+        });
+      },
+    };
+  }
+
+  /* 구역 상세 — 카테고리 안의 항목들 */
+  function viewZone(it) {
+    const parts = split(it[1]);
+    return {
+      title: it[0], sub: bld.name,
+      html: `<div class="dsec"><div class="dh">${E(it[0])} · ${parts.length}개</div>
+          <div class="zlist">${parts.map((x) => `<div class="zrow">${B(x)}</div>`).join('')}</div></div>
+        ${bld.roomsUrl ? `<div class="foot"><button class="btn" data-open style="width:100%">공식 페이지에서 보기</button></div>` : ''}`,
+      bind: bindOpen,
+    };
+  }
+
+  function blankView() {
+    return {
+      title: bld.name, sub: '자료 미확보',
+      html: `${hero()}${infoBlock()}
+        <div class="dempty">이 시설은 <b>층·구역 자료가 아직 없습니다.</b><br>확인된 내용만 넣는 원칙이라 비워 뒀습니다. 현장 자료를 주시면 바로 채웁니다.</div>`,
+    };
+  }
+
+  function infoBlock() {
+    const info = bld.info || [];
+    if (!info.length) return '';
+    return `<div class="dsec"><div class="dh">알아둘 것</div>
+      <ul class="plinfo">${info.map((t) => `<li${/^⚠/.test(t) ? ' class="warn"' : ''}>${B(t)}</li>`).join('')}</ul></div>`;
   }
 
   /* 호텔 — 층은 단순(2~9F 객실). 리조트와 뭐가 다른지가 핵심 */
@@ -489,6 +616,9 @@ const Drill = (() => {
     page.innerHTML = v.html;
     st.appendChild(page);
     if (v.bind) v.bind(page, push);
+    const ap = page.querySelector('[data-addphoto]');
+    if (ap) ap.onclick = () => addPhoto(page);
+    fillHero(page);
     if (old) { old.classList.remove('here'); old.classList.add(dir === 'back' ? 'out-back' : 'out-fwd'); setTimeout(() => old.remove(), 280); }
     // rAF는 화면이 합성되지 않을 때(백그라운드 탭 등) 지연돼 페이지가 영영 안 보일 수 있다 → 타이머 사용
     setTimeout(() => page.classList.add('here'), 10);

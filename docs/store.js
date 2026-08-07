@@ -496,6 +496,64 @@ const Store = (() => {
       get cfg() { return cfg; }, get status() { return status; }, get lastError() { return lastError; },
       configure(c) { cfg = c; if (c) localStorage.setItem(LS_CFG, JSON.stringify(c)); else { localStorage.removeItem(LS_CFG); setStatus('local'); } if (c) schedule(10); },
       schedule, pullPush,
+      /* ── 사진 ──
+         비공개 저장소 places/{placeId}/ 에 둔다 (객실 사진 photos/{동}/{호수}.jpg 와 분리).
+         팀 코드로 연결된 기기만 토큰이 있어
+         받아갈 수 있다. 공개 저장소(docs/)에는 사진을 두지 않는다. */
+      photos: (() => {
+        const memo = new Map();            // path → dataURL
+        const listMemo = new Map();        // placeId → [{name, path, size}]
+        const gh = (path, init) => fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+          ...init, headers: { Authorization: 'Bearer ' + cfg.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(init && init.headers) },
+        });
+        const mime = (n) => /\.png$/i.test(n) ? 'image/png' : /\.webp$/i.test(n) ? 'image/webp' : 'image/jpeg';
+        return {
+          ready: () => !!(cfg && cfg.repo && cfg.token),
+          async list(placeId) {
+            if (!this.ready()) return [];
+            if (listMemo.has(placeId)) return listMemo.get(placeId);
+            let out = [];
+            try {
+              const r = await gh(`places/${encodeURIComponent(placeId)}?t=${Date.now()}`);
+              if (r.status === 200) {
+                const j = await r.json();
+                out = (Array.isArray(j) ? j : []).filter((f) => f.type === 'file' && /\.(jpe?g|png|webp)$/i.test(f.name))
+                  .map((f) => ({ name: f.name, path: f.path, size: f.size, sha: f.sha }));
+              }
+            } catch (e) { /* 오프라인이면 조용히 없음 처리 */ }
+            listMemo.set(placeId, out);
+            return out;
+          },
+          async load(p) {
+            if (memo.has(p.path)) return memo.get(p.path);
+            if (!this.ready()) return null;
+            const r = await gh(p.path + `?t=${Date.now()}`);
+            if (r.status !== 200) return null;
+            const j = await r.json();
+            const url = `data:${mime(p.name)};base64,${String(j.content || '').replace(/\n/g, '')}`;
+            memo.set(p.path, url);
+            return url;
+          },
+          async upload(placeId, name, base64) {
+            if (!this.ready()) throw new Error('팀 서버에 연결돼 있어야 사진을 올릴 수 있습니다.');
+            const path = `places/${placeId}/${name}`;
+            const r = await gh(path, {
+              method: 'PUT',
+              body: JSON.stringify({ message: `photo ${placeId}/${name}`, content: base64, branch: cfg.branch || 'main' }),
+            });
+            if (!r.ok) throw new Error('업로드 실패 ' + r.status + (await ghMsg(r)));
+            listMemo.delete(placeId);
+            return path;
+          },
+          async remove(placeId, p) {
+            if (!this.ready()) throw new Error('팀 서버 연결이 필요합니다.');
+            const r = await gh(p.path, { method: 'DELETE', body: JSON.stringify({ message: `photo remove ${p.path}`, sha: p.sha, branch: cfg.branch || 'main' }) });
+            if (!r.ok) throw new Error('삭제 실패 ' + r.status);
+            listMemo.delete(placeId); memo.delete(p.path);
+          },
+          forget: (placeId) => listMemo.delete(placeId),
+        };
+      })(),
       // 첫 동기화 완료까지 기다린다(미연결이면 즉시). 8초 넘으면 그냥 진행.
       ready() { return cfg ? Promise.race([firstDone, new Promise((r) => setTimeout(r, 8000))]) : Promise.resolve(); },
       onStatus(f) { listeners.push(f); }, onChange(f) { onRemoteChange = f; },
