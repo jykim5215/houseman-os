@@ -1,6 +1,6 @@
 {
-  "name": "하우스맨 노트 — Vivaldi Park Houseman OS",
-  "short_name": "하우스맨 노트",
+  "name": "Vivaldis — 비발디파크 하우스맨",
+  "short_name": "Vivaldis",
   "description": "비발디파크 하우스맨 업무 플랫폼 — 재고·장비·습득물·하자·인계 + 신뢰형 챗",
   "start_url": "./",
   "scope": "./",

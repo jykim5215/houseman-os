@@ -1,6 +1,6 @@
 ﻿/* 하우스맨 노트 — UI v0.5 (동별 분리 · 챗 모드 · 팀 톡 · 관리자 PIN) */
 'use strict';
-const APP_VERSION = '0.17.0';
+const APP_VERSION = '0.19.0';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
@@ -17,8 +17,15 @@ const isAdmin = () => Store.Auth.isAdmin();
 const me = () => Store.Auth.current;
 
 /* ── 시트 ── */
-function sheet(html) { $('#sheetBody').innerHTML = html; $('#sheetbg').classList.remove('hide'); setTimeout(() => $('#sheet').classList.add('open'), 10); }
-function closeSheet() { $('#sheet').classList.remove('open'); $('#sheetbg').classList.add('hide'); }
+function sheet(html) {
+  $('#sheetBody').innerHTML = html; $('#sheetbg').classList.remove('hide');
+  setTimeout(() => $('#sheet').classList.add('open'), 10);
+  if (window.Nav) Nav.pushLayer('sheet', () => closeSheet());
+}
+function closeSheet() {
+  $('#sheet').classList.remove('open'); $('#sheetbg').classList.add('hide');
+  if (window.Nav) Nav.dropLayer('sheet');
+}
 $('#sheetbg').onclick = closeSheet;
 
 /* ── 챗(AI) ── */
@@ -829,7 +836,7 @@ const SPLASH_AT = Date.now();
 function hideSplash() {
   const el = document.getElementById('splash'); if (!el || el.dataset.done) return;
   el.dataset.done = '1';
-  const wait = Math.max(0, 900 - (Date.now() - SPLASH_AT));   // 너무 빨리 사라져 깜빡이지 않게
+  const wait = Math.max(0, 2100 - (Date.now() - SPLASH_AT));  // 마크가 다 그려지고 이름이 읽힐 만큼
   setTimeout(() => { el.classList.add('gone'); setTimeout(() => el.remove(), 460); }, wait);
 }
 (function boot() {
@@ -838,6 +845,7 @@ function hideSplash() {
   setMode('ask'); renderCounters(); renderQuick(); refreshHead();
   $('#bldBtn').classList.add('hide'); $('#appTitle').classList.remove('hide'); // 시작 탭이 챗
   Store.Sync.onStatus(() => refreshHead()); Store.Sync.onChange(() => refreshAll()); Store.Sync.start();
+  if (window.Nav) Nav.start();
   hideSplash();
   const u = me();
   if (Store.Sync.cfg) { // 이미 연결됨
@@ -854,4 +862,4 @@ function hideSplash() {
     else showLogin();
   });
 })();
-setTimeout(hideSplash, 4000);   // 안전장치 — 무슨 일이 있어도 시작 화면에 갇히지 않는다
+setTimeout(hideSplash, 6000);   // 안전장치 — 무슨 일이 있어도 시작 화면에 갇히지 않는다

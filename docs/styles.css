@@ -859,3 +859,25 @@ h3{letter-spacing:-.02em}
 .pvrail img{flex:none;width:100vw;max-height:88vh;object-fit:contain;scroll-snap-align:center}
 .pvclose{position:absolute;top:calc(12px + env(safe-area-inset-top));right:14px;z-index:2;
   width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-size:18px;font-weight:700}
+.navtoast{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translate(-50%,10px);
+  z-index:400;background:rgba(30,20,10,.92);color:#fdf3e4;font-size:13px;font-weight:600;
+  padding:11px 18px;border-radius:999px;opacity:0;pointer-events:none;
+  transition:opacity .2s var(--ease),transform .2s var(--ease)}
+.navtoast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ══ 매장·시설 카드 ══ */
+.vfilter{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+.vfilter button{border:2px solid var(--line-strong);background:var(--surface);border-radius:999px;
+  min-height:36px;padding:0 13px;font-size:11.5px;font-weight:700;color:var(--dim)}
+.vfilter button.on{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.vgrid{display:flex;flex-direction:column;gap:7px}
+.vcard{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
+  border:2px solid var(--line-strong);border-radius:var(--r-md);background:var(--surface);
+  padding:11px 13px;min-height:56px;transition:transform .12s var(--ease),border-color .15s ease}
+.vcard:active{transform:scale(.985);border-color:var(--accent)}
+.vcard .vtop{display:flex;align-items:baseline;gap:8px;width:100%}
+.vcard .vn{font-size:13.5px;font-weight:800;color:var(--text);flex:1;min-width:0}
+.vcard .vfee{flex:none;font-size:12px;font-weight:800;color:var(--accent)}
+.vcard .vmeta{font-size:11.5px;color:var(--text-2);line-height:1.45}
+.vcard .vtel{font-size:11px;color:var(--dim);font-weight:700}
+a.tel{color:var(--accent);font-weight:800;text-decoration:none}

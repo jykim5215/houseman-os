@@ -126,7 +126,8 @@ const Drill = (() => {
       <div class="pvrail">${urls.map((u) => `<img src="${u}" alt="">`).join('')}</div>`;
     document.body.appendChild(v);
     setTimeout(() => { v.classList.add('on'); const r = v.querySelector('.pvrail'); r.scrollLeft = r.clientWidth * (start || 0); }, 10);
-    const kill = () => { v.classList.remove('on'); setTimeout(() => v.remove(), 220); };
+    const kill = () => { if (window.Nav) Nav.dropLayer('photo'); v.classList.remove('on'); setTimeout(() => v.remove(), 220); };
+    if (window.Nav) Nav.pushLayer('photo', kill);
     v.querySelector('.pvclose').onclick = kill;
     v.addEventListener('click', (e) => { if (e.target === v) kill(); });
   }
@@ -193,6 +194,54 @@ const Drill = (() => {
   }
 
 
+  /* 매장·시설 카드 — 위치·전화·시간·요금 (공식홈 상세에서 수집) */
+  function venueBlock() {
+    if (typeof Venues === 'undefined') return '';
+    const list = Venues.forPlace(bld.id);
+    if (!list.length) return '';
+    const cs = Venues.cats(bld.id);
+    const card = (v, i) => `<button class="vcard" data-v="${i}">
+        <span class="vtop"><span class="vn">${E(v.n)}</span>${v.fee ? `<span class="vfee">${E(v.fee[0][1])}~</span>` : ''}</span>
+        <span class="vmeta">${v.h ? E(v.h.split('·')[0].trim()) : E(v.loc || '')}</span>
+        ${v.tel ? `<span class="vtel">${E(v.tel)}</span>` : ''}</button>`;
+    return `<div class="dsec"><div class="dh">매장 · 시설 <span class="cnt">${list.length}</span></div>
+      <div class="vfilter" id="vFil"><button class="on" data-c="">전체</button>${cs.map((c) => `<button data-c="${E(c)}">${E(c)}</button>`).join('')}</div>
+      <div class="vgrid" id="vGrid">${list.map(card).join('')}</div>
+      <p class="dnote">소노 공식홈 시설 상세에서 옮김 (${E(Venues.at())} 기준). 운영시간·요금은 시즌마다 바뀌니 확정은 프런트로.</p></div>`;
+  }
+  function bindVenues(root, push) {
+    if (typeof Venues === 'undefined') return;
+    const list = Venues.forPlace(bld.id); if (!list.length) return;
+    const grid = root.querySelector('#vGrid'); if (!grid) return;
+    const draw = (cat) => {
+      grid.querySelectorAll('.vcard').forEach((c, i) => {
+        c.classList.toggle('hide', !!cat && list[i].c !== cat);
+      });
+    };
+    root.querySelectorAll('#vFil [data-c]').forEach((b) => b.onclick = () => {
+      root.querySelectorAll('#vFil [data-c]').forEach((x) => x.classList.toggle('on', x === b));
+      draw(b.dataset.c);
+    });
+    grid.querySelectorAll('.vcard').forEach((c) => c.onclick = () => push(viewVenue(list[+c.dataset.v])));
+  }
+  function viewVenue(v) {
+    return {
+      title: v.n, sub: v.c || bld.name,
+      html: `
+        ${v.fee ? `<div class="dsec"><div class="dh">이용요금</div>
+          <table class="pltab">${v.fee.map(([k, val]) => `<tr><th>${E(k)}</th><td><b>${E(val)}</b></td></tr>`).join('')}</table></div>` : ''}
+        <div class="dsec"><div class="dh">기본 정보</div>
+          <table class="pltab">
+            ${v.loc ? `<tr><th>위치</th><td>${E(v.loc)}</td></tr>` : ''}
+            ${v.h ? `<tr><th>운영시간</th><td>${E(v.h)}</td></tr>` : ''}
+            ${v.tel ? `<tr><th>문의</th><td><a class="tel" href="tel:${E(v.tel.replace(/[^0-9+]/g, ''))}">${E(v.tel)}</a></td></tr>` : ''}
+          </table></div>
+        ${(v.note || []).length ? `<div class="dsec"><div class="dh">이용 안내</div>
+          ${rules(v.note, (v.note || []).some((x) => /^⚠/.test(x)) ? 'warn' : '')}</div>` : ''}
+        <p class="dnote">소노 공식홈 시설 상세 (${E(Venues.at())} 수집). 시즌·현장 사정으로 바뀔 수 있습니다.</p>`,
+    };
+  }
+
   /* 리조트 동 — 정면에서 층 선택 */
   function facadeView(rows) {
     return {
@@ -200,8 +249,10 @@ const Drill = (() => {
       html: `<div class="facwrap">${facade(bld)}</div>
         ${hero()}
         <p class="dnote">건물 정면은 실제 사진의 특징(형태·색·중앙 띠)을 따라 그린 그림입니다.${isStay() ? ' 층 오른쪽 숫자는 <b>신경 쓸 객실 수</b>입니다.' : ''}</p>
+        ${venueBlock()}
         ${infoBlock()}`,
       bind(root, push) {
+        bindVenues(root, push);
         root.querySelectorAll('.fac .fl').forEach((g) => {
           const go = () => push(viewFloor(rows[+g.dataset.i]));
           g.addEventListener('click', go);
@@ -250,8 +301,10 @@ const Drill = (() => {
           ${rules(['**칫솔·치약·헤어빗·컨디셔너가 나옵니다** — 리조트 객실에는 없습니다', '**미니바 무료**', '취사 불가 — 전기포트·컵·접시·포크만'], 'ok')}</div>
         ${tbl(pick(['비품', '수건']))}
         <div class="dsec"><div class="dh">층</div>${floorCards(rows)}</div>
+        ${venueBlock()}
         ${openBtn('공식 객실 정보 보기')}`,
       bind(root, push) {
+        bindVenues(root, push);
         root.querySelectorAll('[data-f]').forEach((b2) => b2.onclick = () => push(viewFloor(rows[+b2.dataset.f])));
         bindOpen(root);
       },
@@ -269,9 +322,10 @@ const Drill = (() => {
         <div class="dsec"><div class="dh">입실 전 반드시 확인</div>${rules(rl, 'warn')}</div>
         ${roomItem ? `<div class="dsec"><div class="dh">객실 등급</div>${chips(split(roomItem[1]))}</div>` : ''}
         ${tbl(pick(['부대', '야외', '수건']))}
+        ${venueBlock()}
         ${others.length ? `<div class="dsec"><div class="dh">참고</div>${rules(others)}</div>` : ''}
         ${openBtn('공식 객실 정보 보기')}`,
-      bind: bindOpen,
+      bind(root, push) { bindOpen(root); bindVenues(root, push); },
     };
   }
 
@@ -307,7 +361,9 @@ const Drill = (() => {
         <div class="dsec"><div class="dh">꼭 챙겨야 할 것</div>${rules(must, 'ok')}</div>
         <div class="dsec"><div class="dh">안 되는 것</div>${rules(no, 'bad')}</div>
         <div class="dsec"><div class="dh">대여 · 요금 기준</div>${tbl(bld.items || [])}</div>
+        ${venueBlock()}
         ${etc.length ? `<div class="dsec"><div class="dh">그 밖에</div>${rules(etc)}</div>` : ''}`,
+      bind(root, push) { bindVenues(root, push); },
     };
   }
 
@@ -324,8 +380,9 @@ const Drill = (() => {
           <ol class="steps">${steps.map((t) => `<li>${E(t)}</li>`).join('')}</ol></div>` : ''}
         <div class="dsec"><div class="dh">알아둘 것</div>${rules(bld.info || [], 'warn')}</div>
         ${(bld.items || []).length ? `<div class="dsec"><div class="dh">시설</div>${tbl(bld.items)}</div>` : ''}
+        ${venueBlock()}
         ${rows.length ? `<div class="dsec"><div class="dh">층</div>${floorCards(rows)}</div>` : ''}`,
-      bind(root, push) { root.querySelectorAll('[data-f]').forEach((b2) => b2.onclick = () => push(viewFloor(rows[+b2.dataset.f]))); },
+      bind(root, push) { bindVenues(root, push); root.querySelectorAll('[data-f]').forEach((b2) => b2.onclick = () => push(viewFloor(rows[+b2.dataset.f]))); },
     };
   }
 
@@ -341,8 +398,9 @@ const Drill = (() => {
           <div class="catgrid">${items.map((it, i) => `<button class="cat" data-z="${i}">
             <span class="ci">${ICON[it[0]] || '📍'}</span><span class="ck">${E(it[0])}</span>
             <span class="cn">${split(it[1]).length}</span></button>`).join('')}</div></div>
+        ${venueBlock()}
         ${(bld.info || []).length ? `<div class="dsec"><div class="dh">참고</div>${rules(bld.info)}</div>` : ''}`,
-      bind(root, push) { root.querySelectorAll('[data-z]').forEach((b2) => b2.onclick = () => push(viewZone(items[+b2.dataset.z]))); },
+      bind(root, push) { bindVenues(root, push); root.querySelectorAll('[data-z]').forEach((b2) => b2.onclick = () => push(viewZone(items[+b2.dataset.z]))); },
     };
   }
 
@@ -368,7 +426,9 @@ const Drill = (() => {
       html: `${hero()}
         ${info.length ? `<div class="dsec">${rules(info)}</div>` : ''}
         ${items.length ? tbl(items) : ''}
-        ${!info.length && !items.length ? `<div class="dempty">확인된 자료가 없습니다.</div>` : ''}`,
+        ${venueBlock()}
+        ${!info.length && !items.length && !venueBlock() ? `<div class="dempty">확인된 자료가 없습니다.</div>` : ''}`,
+      bind(root, push) { bindVenues(root, push); },
     };
   }
 
@@ -630,6 +690,7 @@ const Drill = (() => {
      그래서 토큰으로 무효화한다(닫자마자 다시 열면 빈 화면이던 버그). */
   let closeToken = 0;
   function close() {
+    if (window.Nav) Nav.dropLayer('drill');
     const el = shell(); el.classList.remove('open');
     const t = ++closeToken;
     setTimeout(() => {
@@ -647,6 +708,7 @@ const Drill = (() => {
     el.querySelector('#dStage').innerHTML = '';      // 이전에 열었던 화면이 남지 않게 비운다
     setTimeout(() => el.classList.add('open'), 10);
     render('fwd');
+    if (window.Nav) Nav.pushLayer('drill', () => close());
     return true;
   }
   return { open, close, isOpen: () => { const el = document.getElementById('drill'); return !!el && !el.classList.contains('hide'); } };

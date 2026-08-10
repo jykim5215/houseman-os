@@ -23,6 +23,7 @@ const Panels = (() => {
   }
   let token = 0;
   function close() {
+    if (window.Nav) Nav.dropLayer('panel');
     const el = shell(); el.classList.remove('open');
     const t = ++token;
     setTimeout(() => { if (t !== token) return; el.classList.add('hide'); el.querySelector('#pBody').innerHTML = ''; }, 240);
@@ -37,6 +38,7 @@ const Panels = (() => {
     el.classList.remove('hide');
     setTimeout(() => el.classList.add('open'), 10);
     if (bind) bind(body);
+    if (window.Nav) Nav.pushLayer('panel', () => close());
   }
 
   /* ── 1. 자주 묻는 것 ── */
